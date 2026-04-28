@@ -270,7 +270,7 @@ DELETE /api/v1/api-keys/{id}           ← révoquer
 | S4 | REST Engine (httpx async, tous types auth) | ✅ Done |
 | S5 | JSON Transformer (XML→JSON, mapping, nettoyage) | ✅ Done |
 | S6 | CRUD Connecteurs + chiffrement + endpoint /execute | ✅ Done |
-| S7 | Logs & Exécutions (table + API) | ⬜ À faire |
+| S7 | Logs & Exécutions (table + API) | ✅ Done |
 | S8 | API Keys (génération, validation, rate limiting) | ⬜ À faire |
 
 ### Phase 2 — Dashboard (Sprints 9–11)
