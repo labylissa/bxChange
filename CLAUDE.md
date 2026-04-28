@@ -277,7 +277,7 @@ DELETE /api/v1/api-keys/{id}           ← révoquer
 | Sprint | Objectif | Statut |
 |--------|----------|--------|
 | S9 | Frontend React : Auth + Layout + Routing | ✅ Done |
-| S10 | Frontend : Wizard connecteur + page test | ⬜ À faire |
+| S10 | Frontend : Wizard connecteur + page test | ✅ Done |
 | S11 | Frontend : Dashboard métriques + Logs viewer | ⬜ À faire |
 
 ### Phase 3 — Sécurité (Sprint 12–14)

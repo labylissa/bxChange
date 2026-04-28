@@ -6,6 +6,7 @@ import { ProtectedRoute } from '@/features/auth/ProtectedRoute'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { ConnectorsPage } from '@/features/connectors/ConnectorsPage'
+import { ConnectorDetailPage } from '@/features/connectors/ConnectorDetailPage'
 import { LogsPage } from '@/features/logs/LogsPage'
 import { APIKeysPage } from '@/features/api-keys/APIKeysPage'
 import { SettingsPage } from '@/features/settings/SettingsPage'
@@ -28,6 +29,7 @@ export default function App() {
             <Route element={<DashboardLayout />}>
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/dashboard/connectors" element={<ConnectorsPage />} />
+              <Route path="/dashboard/connectors/:id" element={<ConnectorDetailPage />} />
               <Route path="/dashboard/logs" element={<LogsPage />} />
               <Route path="/dashboard/api-keys" element={<APIKeysPage />} />
               <Route path="/dashboard/settings" element={<SettingsPage />} />
