@@ -6,7 +6,13 @@
       "Bash(docker compose *)",
       "Bash(curl -s http://localhost:8000/health)",
       "Bash(curl -s http://localhost/health)",
-      "Bash(curl -s http://localhost/docs)"
+      "Bash(curl -s http://localhost/docs)",
+      "Bash(npm --version)",
+      "Bash(npm create *)",
+      "Bash(npm install *)",
+      "Bash(npx tailwindcss *)",
+      "Bash(npx tsc *)",
+      "Bash(npx vite *)"
     ]
   }
 }
