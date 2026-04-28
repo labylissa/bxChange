@@ -264,12 +264,12 @@ DELETE /api/v1/api-keys/{id}           ← révoquer
 ### Phase 1 — MVP (Sprints 1–8) ← EN COURS
 | Sprint | Objectif | Statut |
 |--------|----------|--------|
-| S1 | Setup Docker + FastAPI + PostgreSQL + Redis + Alembic | ⬜ À faire |
-| S2 | Auth JWT complet (register, login, refresh, me) | ⬜ À faire |
-| S3 | SOAP Engine (zeep, WSDL parsing, appel, XML brut) | ⬜ À faire |
-| S4 | REST Engine (httpx async, tous types auth) | ⬜ À faire |
-| S5 | JSON Transformer (XML→JSON, mapping, nettoyage) | ⬜ À faire |
-| S6 | CRUD Connecteurs + chiffrement + endpoint /execute | ⬜ À faire |
+| S1 | Setup Docker + FastAPI + PostgreSQL + Redis + Alembic | ✅ Done |
+| S2 | Auth JWT complet (register, login, refresh, me) | ✅ Done |
+| S3 | SOAP Engine (zeep, WSDL parsing, appel, XML brut) | ✅ Done |
+| S4 | REST Engine (httpx async, tous types auth) | ✅ Done |
+| S5 | JSON Transformer (XML→JSON, mapping, nettoyage) | ✅ Done |
+| S6 | CRUD Connecteurs + chiffrement + endpoint /execute | ✅ Done |
 | S7 | Logs & Exécutions (table + API) | ⬜ À faire |
 | S8 | API Keys (génération, validation, rate limiting) | ⬜ À faire |
 

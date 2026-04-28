@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ExecutionRead(BaseModel):
@@ -17,3 +17,16 @@ class ExecutionRead(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ExecuteRequest(BaseModel):
+    params: dict = Field(default_factory=dict)
+    body: dict | None = None
+    transform_override: dict | None = None
+
+
+class ExecuteResponse(BaseModel):
+    execution_id: uuid.UUID
+    status: str
+    result: dict | None
+    duration_ms: int | None

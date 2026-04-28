@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, JSON, String, Text, Uuid
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, JSON, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -9,6 +9,9 @@ from app.db.base import Base
 
 class Execution(Base):
     __tablename__ = "executions"
+    __table_args__ = (
+        Index("ix_executions_connector_created", "connector_id", "created_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     connector_id: Mapped[uuid.UUID] = mapped_column(

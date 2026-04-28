@@ -15,7 +15,9 @@ from app.schemas.connector import (
     RestTestPayload,
     WSDLParseResult,
 )
-from app.services import crypto, rest_engine, soap_engine, transformer
+from app.schemas.execution import ExecuteRequest, ExecuteResponse
+from app.services import crypto, execution_service, rest_engine, soap_engine, transformer
+from app.services.execution_service import ConnectorNotFoundError
 from app.services.rest_engine import RESTConnectionError, RESTResponseError, RESTSSLError, RESTTimeoutError
 from app.services.soap_engine import SOAPConnectionError, SOAPTimeoutError, WSDLLoadError
 
@@ -215,6 +217,34 @@ async def test_rest(
     except RESTResponseError as exc:
         # Return remote error as-is — it's informational for a test endpoint
         return {"status_code": exc.status_code, "body": exc.body, "headers": {}}
+
+
+@router.post("/{connector_id}/execute", response_model=ExecuteResponse)
+async def execute_connector(
+    connector_id: uuid.UUID,
+    payload: ExecuteRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ExecuteResponse:
+    try:
+        exec_read = await execution_service.execute_connector(
+            connector_id=connector_id,
+            tenant_id=current_user.tenant_id,
+            params=dict(payload.params),
+            body=payload.body,
+            transform_override=payload.transform_override,
+            triggered_by="dashboard",
+            db=db,
+        )
+    except ConnectorNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connector not found")
+
+    return ExecuteResponse(
+        execution_id=exec_read.id,
+        status=exec_read.status,
+        result=exec_read.response_payload,
+        duration_ms=exec_read.duration_ms,
+    )
 
 
 @router.post("/{connector_id}/preview-transform")
