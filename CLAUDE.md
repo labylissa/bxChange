@@ -271,7 +271,7 @@ DELETE /api/v1/api-keys/{id}           ← révoquer
 | S5 | JSON Transformer (XML→JSON, mapping, nettoyage) | ✅ Done |
 | S6 | CRUD Connecteurs + chiffrement + endpoint /execute | ✅ Done |
 | S7 | Logs & Exécutions (table + API) | ✅ Done |
-| S8 | API Keys (génération, validation, rate limiting) | ⬜ À faire |
+| S8 | API Keys (génération, validation, rate limiting) | ✅ Done |
 
 ### Phase 2 — Dashboard (Sprints 9–11)
 | Sprint | Objectif | Statut |

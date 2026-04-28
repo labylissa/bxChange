@@ -1,10 +1,11 @@
 import uuid
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user, get_db
+from app.core.dependencies import get_current_user, get_db, get_execute_auth
 from app.models.connector import Connector
 from app.models.user import User
 from app.schemas.connector import (
@@ -223,17 +224,18 @@ async def test_rest(
 async def execute_connector(
     connector_id: uuid.UUID,
     payload: ExecuteRequest,
-    current_user: User = Depends(get_current_user),
+    auth: Annotated[tuple[uuid.UUID, str], Depends(get_execute_auth)],
     db: AsyncSession = Depends(get_db),
 ) -> ExecuteResponse:
+    tenant_id, triggered_by = auth
     try:
         exec_read = await execution_service.execute_connector(
             connector_id=connector_id,
-            tenant_id=current_user.tenant_id,
+            tenant_id=tenant_id,
             params=dict(payload.params),
             body=payload.body,
             transform_override=payload.transform_override,
-            triggered_by="dashboard",
+            triggered_by=triggered_by,
             db=db,
         )
     except ConnectorNotFoundError:

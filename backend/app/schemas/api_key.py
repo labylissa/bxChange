@@ -24,4 +24,4 @@ class ApiKeyRead(BaseModel):
 
 
 class ApiKeyCreated(ApiKeyRead):
-    key: str
+    raw_key: str
