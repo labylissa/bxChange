@@ -278,7 +278,7 @@ DELETE /api/v1/api-keys/{id}           ← révoquer
 |--------|----------|--------|
 | S9 | Frontend React : Auth + Layout + Routing | ✅ Done |
 | S10 | Frontend : Wizard connecteur + page test | ✅ Done |
-| S11 | Frontend : Dashboard métriques + Logs viewer | ⬜ À faire |
+| S11 | Frontend : Dashboard métriques + Logs viewer | ✅ Done |
 
 ### Phase 3 — Sécurité (Sprint 12–14)
 - OAuth2, mTLS, 2FA, Row-Level Security, Audit logs

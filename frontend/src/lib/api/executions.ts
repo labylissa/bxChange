@@ -42,10 +42,22 @@ export const executionsApi = {
     apiClient.get<Execution>(`/api/v1/executions/${id}`).then((r) => r.data),
 }
 
+export interface Alert {
+  type: string
+  connector_id: string
+  connector_name: string
+  value: number
+  threshold: number
+  since: string | null
+}
+
 export const logsApi = {
   getMetrics: (period = '24h') =>
     apiClient.get<Metrics>('/api/v1/logs/metrics', { params: { period } }).then((r) => r.data),
 
   getRecent: () =>
     apiClient.get<RecentExecution[]>('/api/v1/logs/recent').then((r) => r.data),
+
+  getAlerts: () =>
+    apiClient.get<Alert[]>('/api/v1/logs/alerts').then((r) => r.data),
 }
