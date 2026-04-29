@@ -168,6 +168,58 @@ bxChange/
 
 ---
 
+## 👥 Rôles et Permissions (Sprint 12)
+
+| Rôle | Niveau | Périmètre |
+|------|--------|-----------|
+| `super_admin` | 4 | Voit tous les tenants, crée/modifie/supprime des tenants, modifie les quotas, impersonate un user. `tenant_id = NULL`. |
+| `admin` | 3 | Gère les users de **son** tenant (inviter, désactiver, changer le rôle). Crée des connecteurs. Voit logs et métriques. |
+| `developer` | 2 | Crée/modifie/supprime **ses** connecteurs. Teste. Voit les logs. Ne gère **pas** les users. |
+| `viewer` | 1 | Lecture seule : connecteurs, logs, métriques. Aucune écriture. |
+
+**Guards FastAPI :** `require_super_admin`, `require_admin_or_above`, `require_developer_or_above` (dans `app/core/dependencies.py`).
+
+**Bootstrap :** Le premier `super_admin` est créé au démarrage depuis `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` (`.env`).
+
+**Quotas :**
+- `connector_limit` : nombre max de connecteurs non-désactivés par tenant (vérifié à la création).
+- `users_limit` : nombre max d'utilisateurs par tenant (vérifié à l'invitation).
+- Endpoint quota : `GET /api/v1/auth/quota` → `{ connector_count, connector_limit, user_count, users_limit }`.
+
+---
+
+## 📖 Documentation API (Sprint 13)
+
+### URLs d'accès
+
+| URL | Description |
+|-----|-------------|
+| `http://localhost:8000/docs` | Swagger UI interactif (Authorize avec X-API-Key ou Bearer) |
+| `http://localhost:8000/redoc` | Documentation lisible pour les clients |
+| `http://localhost:8000/openapi.json` | Schéma OpenAPI brut (import Postman/Insomnia) |
+| `/dashboard/api-docs` | Page intégrée dans le dashboard avec guide + iframe + exemples |
+
+### Export schéma OpenAPI
+
+```bash
+# Depuis la racine du repo
+python backend/scripts/export_openapi.py > openapi.json
+```
+
+### Security schemes configurés
+
+- **BearerAuth** : JWT Bearer (`Authorization: Bearer {token}`)
+- **ApiKeyAuth** : Clé API bxChange (`X-API-Key: bxc_...`)
+
+### Enrichissements Swagger
+
+- Descriptions complètes sur chaque route (summary + description + responses)
+- Exemples Pydantic (`json_schema_extra`) sur tous les schémas d'entrée
+- Tags organisés par feature avec descriptions
+- Health endpoint enrichi : version, database, redis, environment, uptime
+
+---
+
 ## 🔐 Sécurité — Règles Absolues
 
 1. **Credentials connecteurs :** toujours chiffrés AES-256 avant stockage (via `services/crypto.py`)
@@ -281,7 +333,12 @@ DELETE /api/v1/api-keys/{id}           ← révoquer
 | S11 | Frontend : Dashboard métriques + Logs viewer | ✅ Done |
 
 ### Phase 3 — Sécurité (Sprint 12–14)
-- OAuth2, mTLS, 2FA, Row-Level Security, Audit logs
+| Sprint | Objectif | Statut |
+|--------|----------|--------|
+| S12 | Multi-tenant avancé + Super Admin + Quotas | ✅ Done |
+| S13 | Documentation API Swagger + Page API Docs dashboard | ✅ Done |
+| S14 | OAuth2, mTLS, 2FA | 🔜 |
+| S15 | Row-Level Security, Audit logs | 🔜 |
 
 ### Phase 4 — SaaS Commercial (Sprint 15–17)
 - Billing Stripe, Self-service onboarding, White label

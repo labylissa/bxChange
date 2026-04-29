@@ -18,7 +18,7 @@ class User(Base):
         Uuid(as_uuid=True), ForeignKey("tenants.id"), nullable=True
     )
     role: Mapped[str] = mapped_column(
-        Enum("admin", "developer", "viewer", name="user_role"),
+        Enum("super_admin", "admin", "developer", "viewer", name="user_role"),
         default="developer",
         nullable=False,
     )

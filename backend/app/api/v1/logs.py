@@ -15,10 +15,24 @@ from app.services import metrics_service
 
 router = APIRouter(prefix="/logs", tags=["logs"])
 
+_401 = {"description": "Token invalide ou expiré"}
 
-@router.get("/metrics")
+
+@router.get(
+    "/metrics",
+    summary="Métriques du tenant",
+    description=(
+        "Retourne les métriques agrégées pour la période choisie : "
+        "nombre total d'appels, taux de succès/erreur, temps de réponse moyen, "
+        "et graphe de volume par heure/jour. Période : `24h` | `7d` | `30d`."
+    ),
+    responses={200: {"description": "Métriques agrégées"}, 401: _401},
+)
 async def get_metrics(
-    period: str = Query(default="24h"),
+    period: str = Query(
+        default="24h",
+        description="Fenêtre d'analyse : 24h | 7d | 30d",
+    ),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
@@ -27,7 +41,12 @@ async def get_metrics(
     return await metrics_service.compute_metrics(current_user.tenant_id, period, db)
 
 
-@router.get("/recent")
+@router.get(
+    "/recent",
+    summary="Exécutions récentes",
+    description="Retourne les 50 dernières exécutions du tenant (toutes connecteurs confondus).",
+    responses={200: {"description": "50 dernières exécutions"}, 401: _401},
+)
 async def get_recent(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -61,7 +80,12 @@ async def get_recent(
     ]
 
 
-@router.get("/errors")
+@router.get(
+    "/errors",
+    summary="Erreurs des dernières 24h",
+    description="Retourne les 100 dernières exécutions en erreur ou timeout des 24 dernières heures.",
+    responses={200: {"description": "Exécutions en erreur"}, 401: _401},
+)
 async def get_errors(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -100,7 +124,15 @@ async def get_errors(
     ]
 
 
-@router.get("/alerts")
+@router.get(
+    "/alerts",
+    summary="Alertes actives",
+    description=(
+        "Retourne les alertes calculées à partir des métriques récentes : "
+        "connecteur en erreur répétée, taux d'échec > seuil, latence anormale."
+    ),
+    responses={200: {"description": "Liste des alertes actives"}, 401: _401},
+)
 async def get_alerts(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

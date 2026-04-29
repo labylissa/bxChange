@@ -12,7 +12,11 @@
       "Bash(npm install *)",
       "Bash(npx tailwindcss *)",
       "Bash(npx tsc *)",
-      "Bash(npx vite *)"
+      "Bash(npx vite *)",
+      "Bash(docker-compose logs *)",
+      "Bash(docker-compose restart *)",
+      "Bash(curl -s -X POST http://localhost:8000/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"seneboly@gmail.com\",\"password\":\"test1234\"}')",
+      "Bash(curl -s -X POST http://localhost:8000/api/v1/auth/register -H \"Content-Type: application/json\" -d '{\"email\":\"test@bxchange.io\",\"password\":\"test1234\",\"full_name\":\"Test User\"}')"
     ]
   }
 }

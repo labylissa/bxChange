@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     encryption_key: str
     environment: str = "development"
     cors_origins: list[str] = ["http://localhost:5173"]
+    super_admin_email: str = ""
+    super_admin_password: str = ""
 
     model_config = {"env_file": ".env"}
 

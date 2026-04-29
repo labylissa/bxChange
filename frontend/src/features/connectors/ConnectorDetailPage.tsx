@@ -27,22 +27,42 @@ function statusVariant(status: string): 'green' | 'red' | 'gray' | 'yellow' {
 }
 
 // ── Test tab ────────────────────────────────────────────────────────────────
-function TestTab({ connectorId }: { connectorId: string }) {
+function TestTab({ connectorId, connectorType }: { connectorId: string; connectorType: string }) {
+  const [operation, setOperation] = useState('')
   const [params, setParams] = useState<Array<{ key: string; value: string }>>([{ key: '', value: '' }])
-  const [result, setResult] = useState<{ data: unknown; durationMs: number | null; status: string } | null>(null)
+  const [result, setResult] = useState<{ data: unknown; durationMs: number | null; status: string; errorMessage: string | null } | null>(null)
 
   const execute = useMutation({
     mutationFn: () => {
-      const p = Object.fromEntries(params.filter((r) => r.key.trim()).map((r) => [r.key, r.value]))
+      const p: Record<string, unknown> = Object.fromEntries(params.filter((r) => r.key.trim()).map((r) => [r.key, r.value]))
+      if (connectorType === 'soap' && operation.trim()) p['operation'] = operation.trim()
       return connectorsApi.executeConnector(connectorId, { params: p })
     },
-    onSuccess: (data) => setResult({ data: data.result, durationMs: data.duration_ms, status: data.status }),
+    onSuccess: (data) => setResult({
+      data: data.result,
+      durationMs: data.duration_ms,
+      status: data.status,
+      errorMessage: data.error_message,
+    }),
   })
 
   return (
     <div className="flex flex-col gap-5">
       <Card>
         <h3 className="text-sm font-medium text-gray-700 mb-3">Paramètres</h3>
+
+        {connectorType === 'soap' && (
+          <div className="mb-4">
+            <label className="block text-xs text-gray-500 mb-1">Opération SOAP</label>
+            <input
+              className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500"
+              placeholder="ex: GetQuote"
+              value={operation}
+              onChange={(e) => setOperation(e.target.value)}
+            />
+          </div>
+        )}
+
         <div className="flex flex-col gap-2 mb-3">
           {params.map((row, i) => (
             <div key={i} className="flex gap-2 items-center">
@@ -91,7 +111,12 @@ function TestTab({ connectorId }: { connectorId: string }) {
               <span className="text-xs text-gray-500">{result.durationMs} ms</span>
             )}
           </div>
-          <JsonViewer data={result.data} />
+          {result.errorMessage && (
+            <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700 font-mono">
+              {result.errorMessage}
+            </div>
+          )}
+          {result.data != null && <JsonViewer data={result.data} />}
         </Card>
       )}
 
@@ -332,7 +357,7 @@ export function ConnectorDetailPage() {
 
       <div className="mt-1">
         {activeTab === 'overview' && <OverviewTab connector={connector} />}
-        {activeTab === 'test' && <TestTab connectorId={connector.id} />}
+        {activeTab === 'test' && <TestTab connectorId={connector.id} connectorType={connector.type} />}
         {activeTab === 'transform' && <TransformTab connectorId={connector.id} />}
         {activeTab === 'history' && <HistoryTab connectorId={connector.id} />}
       </div>

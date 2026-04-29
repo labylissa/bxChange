@@ -9,6 +9,7 @@ from jose import JWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.permissions import ROLE_LEVEL
 from app.core.redis import get_redis
 from app.core.security import decode_token
 from app.db.session import AsyncSessionLocal
@@ -48,6 +49,26 @@ async def get_current_user(
             detail="User not found or inactive",
         )
     return user
+
+
+def _role_guard(min_role: str):
+    """Return a FastAPI dependency that requires the current user to have at least min_role."""
+    min_level = ROLE_LEVEL[min_role]
+
+    async def guard(current_user: User = Depends(get_current_user)) -> User:
+        if ROLE_LEVEL.get(current_user.role, 0) < min_level:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Insufficient permissions. Required: {min_role}",
+            )
+        return current_user
+
+    return guard
+
+
+require_super_admin = _role_guard("super_admin")
+require_admin_or_above = _role_guard("admin")
+require_developer_or_above = _role_guard("developer")
 
 
 async def get_execute_auth(

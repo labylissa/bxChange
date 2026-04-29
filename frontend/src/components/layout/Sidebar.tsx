@@ -1,11 +1,13 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Plug, ScrollText, Key, Settings, Zap, X } from 'lucide-react'
+import { LayoutDashboard, Plug, ScrollText, Key, Settings, Zap, X, Shield, Users, BookOpen } from 'lucide-react'
+import { useIsSuperAdmin, useIsAdmin } from '@/stores/authStore'
 
-const navItems = [
+const dashboardItems = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/dashboard/connectors', label: 'Connecteurs', icon: Plug },
   { to: '/dashboard/logs', label: 'Logs', icon: ScrollText },
   { to: '/dashboard/api-keys', label: 'API Keys', icon: Key },
+  { to: '/dashboard/api-docs', label: 'API Docs', icon: BookOpen },
   { to: '/dashboard/settings', label: 'Paramètres', icon: Settings },
 ]
 
@@ -15,6 +17,9 @@ interface SidebarProps {
 }
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
+  const isSuperAdmin = useIsSuperAdmin()
+  const isAdmin = useIsAdmin()
+
   return (
     <>
       {/* Mobile backdrop */}
@@ -37,7 +42,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200">
           <div className="flex items-center gap-2">
             <Zap className="h-6 w-6 text-brand-600" />
-            <span className="text-lg font-bold text-brand-700">bxChange</span>
+            <span className="text-lg font-bold text-brand-700">BxChange</span>
           </div>
           <button
             onClick={onClose}
@@ -48,8 +53,64 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           </button>
         </div>
 
-        <nav className="flex-1 py-4 px-3 flex flex-col gap-1">
-          {navItems.map(({ to, label, icon: Icon }) => (
+        <nav className="flex-1 py-4 px-3 flex flex-col gap-1 overflow-y-auto">
+          {/* Super Admin section */}
+          {isSuperAdmin && (
+            <>
+              <p className="px-3 pt-2 pb-1 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                Super Admin
+              </p>
+              {[
+                { to: '/admin', label: 'Admin', icon: Shield },
+                { to: '/admin/tenants', label: 'Clients', icon: Users },
+              ].map(({ to, label, icon: Icon }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={to === '/admin'}
+                  onClick={onClose}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-purple-50 text-purple-700'
+                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                    }`
+                  }
+                >
+                  <Icon className="h-4 w-4 flex-shrink-0" />
+                  {label}
+                </NavLink>
+              ))}
+              <div className="my-2 border-t border-gray-100" />
+            </>
+          )}
+
+          {/* Team link for admins */}
+          {isAdmin && !isSuperAdmin && (
+            <>
+              <p className="px-3 pt-2 pb-1 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                Administration
+              </p>
+              <NavLink
+                to="/dashboard/team"
+                onClick={onClose}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-brand-50 text-brand-700'
+                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                  }`
+                }
+              >
+                <Users className="h-4 w-4 flex-shrink-0" />
+                Équipe
+              </NavLink>
+              <div className="my-2 border-t border-gray-100" />
+            </>
+          )}
+
+          {/* Main nav */}
+          {dashboardItems.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}

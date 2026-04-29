@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { Plus, Plug, Wifi, Globe, Play, Pencil, Trash2 } from 'lucide-react'
 import type { Connector } from '@/lib/api/connectors'
 import { connectorsApi } from '@/lib/api/connectors'
+import { quotaApi } from '@/lib/api/admin'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
@@ -95,6 +96,37 @@ function ConnectorCard({ connector, onDelete }: { connector: Connector; onDelete
   )
 }
 
+function QuotaBar({ count, limit }: { count: number; limit: number | null }) {
+  if (limit === null) return null
+  const pct = Math.min(100, Math.round((count / limit) * 100))
+  const isWarning = pct >= 80
+  const isMaxed = count >= limit
+
+  return (
+    <Card padding="sm" className={isMaxed ? 'border-red-200 bg-red-50' : isWarning ? 'border-yellow-200 bg-yellow-50' : ''}>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs font-medium text-gray-700">
+          {count} / {limit} connecteurs utilisés
+        </span>
+        <span className={`text-xs font-semibold ${isMaxed ? 'text-red-600' : isWarning ? 'text-yellow-700' : 'text-gray-500'}`}>
+          {pct}%
+        </span>
+      </div>
+      <div className="w-full bg-gray-200 rounded-full h-1.5">
+        <div
+          className={`h-1.5 rounded-full transition-all ${isMaxed ? 'bg-red-500' : isWarning ? 'bg-yellow-500' : 'bg-brand-600'}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      {isMaxed && (
+        <p className="text-xs text-red-600 mt-1.5">
+          Quota atteint. Contactez votre administrateur pour augmenter la limite.
+        </p>
+      )}
+    </Card>
+  )
+}
+
 export function ConnectorsPage() {
   const [wizardOpen, setWizardOpen] = useState(false)
   const qc = useQueryClient()
@@ -103,6 +135,12 @@ export function ConnectorsPage() {
     queryKey: ['connectors'],
     queryFn: connectorsApi.getConnectors,
     refetchInterval: 30_000,
+  })
+
+  const { data: quota } = useQuery({
+    queryKey: ['quota'],
+    queryFn: quotaApi.getQuota,
+    refetchInterval: 60_000,
   })
 
   const deleteConnector = useMutation({
@@ -114,10 +152,16 @@ export function ConnectorsPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-gray-900">Connecteurs</h1>
-        <Button onClick={() => setWizardOpen(true)} className="flex items-center gap-2">
+        <Button
+          onClick={() => setWizardOpen(true)}
+          className="flex items-center gap-2"
+          disabled={quota?.connector_limit !== null && quota?.connector_limit !== undefined && quota.connector_count >= quota.connector_limit}
+        >
           <Plus className="h-4 w-4" /> Nouveau connecteur
         </Button>
       </div>
+
+      {quota && <QuotaBar count={quota.connector_count} limit={quota.connector_limit} />}
 
       {isLoading && (
         <div className="flex justify-center py-16">

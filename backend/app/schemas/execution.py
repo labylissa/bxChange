@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ExecutionRead(BaseModel):
@@ -16,10 +16,18 @@ class ExecutionRead(BaseModel):
     triggered_by: str
     created_at: datetime
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ExecuteRequest(BaseModel):
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "params": {"intA": 10, "intB": 20},
+            "body": None,
+            "transform_override": {"rename": {"AddResult": "result"}},
+        }
+    })
+
     params: dict = Field(default_factory=dict)
     body: dict | None = None
     transform_override: dict | None = None
@@ -30,3 +38,4 @@ class ExecuteResponse(BaseModel):
     status: str
     result: dict | None
     duration_ms: int | None
+    error_message: str | None = None

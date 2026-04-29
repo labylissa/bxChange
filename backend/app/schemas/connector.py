@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 
 
 class ConnectorType(str, Enum):
@@ -26,6 +26,18 @@ class ConnectorStatus(str, Enum):
 
 
 class ConnectorCreate(BaseModel):
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "name": "Calculator SOAP",
+            "type": "soap",
+            "wsdl_url": "http://www.dneonline.com/calculator.asmx?WSDL",
+            "auth_type": "none",
+            "auth_config": {},
+            "headers": {},
+            "transform_config": {"rename": {"AddResult": "result"}},
+        }
+    })
+
     name: str
     type: ConnectorType
     base_url: str | None = None
@@ -55,7 +67,7 @@ class ConnectorRead(BaseModel):
     status: str
     created_at: datetime
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ConnectorUpdate(BaseModel):
@@ -75,6 +87,15 @@ class WSDLParseResult(BaseModel):
 
 
 class RestTestPayload(BaseModel):
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "method": "GET",
+            "path": "/posts/1",
+            "params": None,
+            "body": None,
+        }
+    })
+
     method: str = "GET"
     path: str = ""
     params: dict | None = None
@@ -82,5 +103,12 @@ class RestTestPayload(BaseModel):
 
 
 class PreviewTransformPayload(BaseModel):
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "raw_xml": "<AddResult>70</AddResult>",
+            "transform_config": {"rename": {"AddResult": "result"}},
+        }
+    })
+
     raw_xml: str
     transform_config: dict | None = None

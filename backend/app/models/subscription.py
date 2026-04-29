@@ -25,5 +25,6 @@ class Subscription(Base):
         nullable=False,
     )
     connector_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    users_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
     calls_limit_month: Mapped[int | None] = mapped_column(Integer, nullable=True)
     current_period_end: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

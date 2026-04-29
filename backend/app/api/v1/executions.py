@@ -16,15 +16,34 @@ from app.schemas.execution import ExecutionRead
 
 router = APIRouter(prefix="/executions", tags=["executions"])
 
+_401 = {"description": "Token invalide ou expiré"}
+_404 = {"description": "Exécution introuvable"}
 
-@router.get("/", response_model=list[ExecutionRead])
+
+@router.get(
+    "/",
+    response_model=list[ExecutionRead],
+    summary="Historique des exécutions",
+    description=(
+        "Retourne l'historique paginé des exécutions du tenant. "
+        "Filtres disponibles : `connector_id`, `status` (success/error/timeout/pending), "
+        "`date_from`, `date_to`. Tri anti-chronologique."
+    ),
+    responses={
+        200: {"description": "Liste paginée des exécutions"},
+        401: _401,
+    },
+)
 async def list_executions(
-    connector_id: uuid.UUID | None = Query(default=None),
-    status_filter: str | None = Query(default=None, alias="status"),
-    date_from: datetime | None = Query(default=None),
-    date_to: datetime | None = Query(default=None),
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
+    connector_id: uuid.UUID | None = Query(default=None, description="Filtrer par connecteur"),
+    status_filter: str | None = Query(
+        default=None, alias="status",
+        description="Filtrer par statut : success | error | timeout | pending",
+    ),
+    date_from: datetime | None = Query(default=None, description="Début de période (ISO 8601)"),
+    date_to: datetime | None = Query(default=None, description="Fin de période (ISO 8601)"),
+    page: int = Query(default=1, ge=1, description="Numéro de page"),
+    page_size: int = Query(default=20, ge=1, le=100, description="Résultats par page (max 100)"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[ExecutionRead]:
@@ -39,9 +58,11 @@ async def list_executions(
     if status_filter is not None:
         stmt = stmt.where(Execution.status == status_filter)
     if date_from is not None:
-        stmt = stmt.where(Execution.created_at >= date_from)
+        df = date_from.replace(tzinfo=None) if date_from.tzinfo else date_from
+        stmt = stmt.where(Execution.created_at >= df)
     if date_to is not None:
-        stmt = stmt.where(Execution.created_at <= date_to)
+        dt = date_to.replace(tzinfo=None) if date_to.tzinfo else date_to
+        stmt = stmt.where(Execution.created_at <= dt)
 
     stmt = stmt.order_by(Execution.created_at.desc())
     stmt = stmt.offset((page - 1) * page_size).limit(page_size)
@@ -51,7 +72,20 @@ async def list_executions(
     return [ExecutionRead.model_validate(e) for e in executions]
 
 
-@router.get("/{execution_id}", response_model=ExecutionRead)
+@router.get(
+    "/{execution_id}",
+    response_model=ExecutionRead,
+    summary="Détail d'une exécution",
+    description=(
+        "Retourne le détail complet d'une exécution : payload de requête, "
+        "réponse JSON, durée, statut HTTP, message d'erreur éventuel."
+    ),
+    responses={
+        200: {"description": "Détail de l'exécution"},
+        401: _401,
+        404: _404,
+    },
+)
 async def get_execution(
     execution_id: uuid.UUID,
     current_user: User = Depends(get_current_user),

@@ -6,7 +6,7 @@ interface User {
   email: string
   full_name: string
   role: string
-  tenant_id: string
+  tenant_id: string | null
 }
 
 interface AuthState {
@@ -38,3 +38,16 @@ export const useAuthStore = create<AuthState>()(
     { name: 'bxchange-auth' }
   )
 )
+
+// Role selectors — use these instead of reading user.role directly
+export const useIsSuperAdmin = () =>
+  useAuthStore((s) => s.user?.role === 'super_admin')
+
+export const useIsAdmin = () =>
+  useAuthStore((s) => s.user?.role === 'admin' || s.user?.role === 'super_admin')
+
+export const useIsDeveloper = () =>
+  useAuthStore((s) => ['super_admin', 'admin', 'developer'].includes(s.user?.role ?? ''))
+
+export const useIsViewer = () =>
+  useAuthStore((s) => s.isAuthenticated)

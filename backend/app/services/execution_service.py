@@ -22,6 +22,25 @@ class UnsupportedConnectorTypeError(Exception):
     """Raised for an unknown connector type."""
 
 
+def _coerce_soap_params(params: dict) -> dict:
+    """Convert string values to int/float where possible — zeep needs typed values."""
+    coerced: dict = {}
+    for k, v in params.items():
+        if isinstance(v, str):
+            try:
+                coerced[k] = int(v)
+                continue
+            except ValueError:
+                pass
+            try:
+                coerced[k] = float(v)
+                continue
+            except ValueError:
+                pass
+        coerced[k] = v
+    return coerced
+
+
 async def execute_connector(
     connector_id: uuid.UUID,
     tenant_id: uuid.UUID,
@@ -75,7 +94,7 @@ async def execute_connector(
             raw = await soap_engine.execute(
                 wsdl_url=connector.wsdl_url,
                 operation=operation,
-                params=call_params,
+                params=_coerce_soap_params(call_params),
                 auth_type=connector.auth_type,
                 auth_config=auth_config,
                 headers=connector.headers or {},

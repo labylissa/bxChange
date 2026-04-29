@@ -61,6 +61,7 @@ export interface ExecuteResult {
   status: string
   result: Record<string, unknown> | null
   duration_ms: number | null
+  error_message: string | null
 }
 
 export interface PreviewTransformPayload {

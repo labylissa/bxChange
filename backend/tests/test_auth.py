@@ -111,3 +111,72 @@ async def test_access_token_used_as_refresh_rejected(client: AsyncClient):
     access_token = reg.json()["access_token"]
     r = await client.post("/api/v1/auth/refresh", json={"refresh_token": access_token})
     assert r.status_code == 401
+
+
+# ── change-password ────────────────────────────────────────────────────────────
+
+async def test_change_password_success(client: AsyncClient):
+    u = _user()
+    reg = await client.post("/api/v1/auth/register", json=u)
+    token = reg.json()["access_token"]
+    r = await client.post(
+        "/api/v1/auth/change-password",
+        json={"current_password": u["password"], "new_password": "NewSecure99!"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200
+    assert r.json()["message"] == "Mot de passe mis à jour"
+
+    # New password must work for login
+    login = await client.post("/api/v1/auth/login", json={"email": u["email"], "password": "NewSecure99!"})
+    assert login.status_code == 200
+
+
+async def test_change_password_wrong_current(client: AsyncClient):
+    u = _user()
+    reg = await client.post("/api/v1/auth/register", json=u)
+    token = reg.json()["access_token"]
+    r = await client.post(
+        "/api/v1/auth/change-password",
+        json={"current_password": "WrongCurrent!", "new_password": "NewSecure99!"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 400
+    assert "actuel" in r.json()["detail"]
+
+
+async def test_change_password_unauthenticated(client: AsyncClient):
+    r = await client.post(
+        "/api/v1/auth/change-password",
+        json={"current_password": "x", "new_password": "y"},
+    )
+    assert r.status_code in (401, 403)
+
+
+# ── update profile ─────────────────────────────────────────────────────────────
+
+async def test_update_profile_success(client: AsyncClient):
+    u = _user()
+    reg = await client.post("/api/v1/auth/register", json=u)
+    token = reg.json()["access_token"]
+    r = await client.put(
+        "/api/v1/auth/me",
+        json={"full_name": "Updated Name"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200
+    assert r.json()["full_name"] == "Updated Name"
+
+
+async def test_update_profile_duplicate_email(client: AsyncClient):
+    u1 = _user()
+    u2 = _user()
+    await client.post("/api/v1/auth/register", json=u1)
+    reg2 = await client.post("/api/v1/auth/register", json=u2)
+    token2 = reg2.json()["access_token"]
+    r = await client.put(
+        "/api/v1/auth/me",
+        json={"email": u1["email"]},
+        headers={"Authorization": f"Bearer {token2}"},
+    )
+    assert r.status_code == 409
