@@ -272,21 +272,33 @@ function HistoryTab({ connectorId }: { connectorId: string }) {
 
 // ── Overview tab ────────────────────────────────────────────────────────────
 function OverviewTab({ connector }: { connector: ReturnType<typeof connectorsApi.getConnector> extends Promise<infer T> ? T : never }) {
+  const wsdlValue = connector.type === 'soap'
+    ? connector.wsdl_source === 'upload'
+      ? { text: 'Fichier local', badge: true }
+      : { text: connector.wsdl_url ?? '—', badge: false }
+    : null
+
   const rows = [
-    { label: 'Type', value: connector.type.toUpperCase() },
-    { label: 'Statut', value: connector.status },
-    { label: 'Auth', value: connector.auth_type },
-    { label: 'Base URL', value: connector.base_url ?? '—' },
-    { label: 'WSDL URL', value: connector.wsdl_url ?? '—' },
-    { label: 'Créé le', value: new Date(connector.created_at).toLocaleString('fr-FR') },
+    { label: 'Type', value: connector.type.toUpperCase(), badge: false },
+    { label: 'Statut', value: connector.status, badge: false },
+    { label: 'Auth', value: connector.auth_type, badge: false },
+    { label: 'Base URL', value: connector.base_url ?? '—', badge: false },
+    ...(wsdlValue ? [{ label: 'WSDL', value: wsdlValue.text, badge: wsdlValue.badge }] : []),
+    { label: 'Créé le', value: new Date(connector.created_at).toLocaleString('fr-FR'), badge: false },
   ]
   return (
     <Card>
       <dl className="divide-y divide-gray-100">
-        {rows.map(({ label, value }) => (
+        {rows.map(({ label, value, badge }) => (
           <div key={label} className="flex items-start py-3 gap-4">
             <dt className="w-28 text-sm text-gray-500 flex-shrink-0">{label}</dt>
-            <dd className="text-sm text-gray-900 font-mono break-all">{value}</dd>
+            <dd className="text-sm text-gray-900 font-mono break-all">
+              {badge ? (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 text-xs font-medium">
+                  <span>📁</span> {value}
+                </span>
+              ) : value}
+            </dd>
           </div>
         ))}
       </dl>
@@ -332,7 +344,11 @@ export function ConnectorDetailPage() {
               <Badge variant={connector.type === 'soap' ? 'blue' : 'gray'}>{connector.type.toUpperCase()}</Badge>
               <Badge variant={statusVariant(connector.status)}>{connector.status}</Badge>
             </div>
-            <p className="text-xs text-gray-400 font-mono mt-0.5">{connector.base_url ?? connector.wsdl_url}</p>
+            <p className="text-xs text-gray-400 font-mono mt-0.5">
+              {connector.base_url ?? (
+                connector.wsdl_source === 'upload' ? '📁 Fichier local' : connector.wsdl_url
+              )}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">

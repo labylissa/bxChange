@@ -1,7 +1,10 @@
+import os
+import pathlib
 import uuid
+import xml.etree.ElementTree as ET
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +20,8 @@ from app.schemas.connector import (
     PreviewTransformPayload,
     RestTestPayload,
     WSDLParseResult,
+    WsdlSource,
+    WsdlUploadResult,
 )
 from app.schemas.execution import ExecuteRequest, ExecuteResponse
 from app.services import crypto, execution_service, rest_engine, soap_engine, transformer
@@ -25,6 +30,10 @@ from app.services.rest_engine import RESTConnectionError, RESTResponseError, RES
 from app.services.soap_engine import SOAPConnectionError, SOAPTimeoutError, WSDLLoadError
 
 router = APIRouter(prefix="/connectors", tags=["connectors"])
+
+UPLOAD_DIR = pathlib.Path(os.environ.get("WSDL_UPLOAD_DIR", "/app/uploads/wsdl"))
+_WSDL_NS = "http://schemas.xmlsoap.org/wsdl/"
+_MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
 
 _401 = {"description": "Token invalide ou expiré"}
 _403 = {"description": "Accès refusé ou quota atteint"}
@@ -51,13 +60,104 @@ async def _get_connector(
 
 
 @router.post(
-    "/",
+    "/upload-wsdl",
+    response_model=WsdlUploadResult,
+    status_code=status.HTTP_200_OK,
+    summary="Uploader un fichier WSDL local",
+    description=(
+        "Reçoit un fichier `.wsdl` ou `.xml` en multipart/form-data, valide son contenu, "
+        "le stocke sur le serveur et retourne la liste des opérations disponibles.\n\n"
+        "**Validations :**\n"
+        "- Extension `.wsdl` ou `.xml` uniquement\n"
+        "- Taille maximale : 5 MB\n"
+        "- Contenu XML valide\n"
+        "- Namespace WSDL `http://schemas.xmlsoap.org/wsdl/` présent\n"
+        "- Au moins une opération définie\n\n"
+        "Le `wsdl_file_id` retourné doit être passé dans `ConnectorCreate.wsdl_file_id` "
+        "avec `wsdl_source=upload`."
+    ),
+    responses={
+        200: {"description": "WSDL valide — opérations listées"},
+        400: {"description": "Fichier invalide (non-WSDL, XML malformé, aucune opération)"},
+        401: _401,
+        413: {"description": "Fichier trop volumineux (limite 5 MB)"},
+    },
+)
+async def upload_wsdl(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+) -> WsdlUploadResult:
+    filename = file.filename or "unknown.wsdl"
+    ext = pathlib.Path(filename).suffix.lower()
+    if ext not in (".wsdl", ".xml"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Extension invalide — seuls les fichiers .wsdl et .xml sont acceptés",
+        )
+
+    content = await file.read()
+    if len(content) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Fichier trop volumineux — limite 5 MB",
+        )
+
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"XML invalide : {exc}",
+        )
+
+    if f"{{{_WSDL_NS}}}" not in root.tag:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Ce fichier n'est pas une définition WSDL valide "
+                "(namespace http://schemas.xmlsoap.org/wsdl/ manquant)"
+            ),
+        )
+
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    file_id = str(uuid.uuid4())
+    file_path = UPLOAD_DIR / f"{file_id}.wsdl"
+    file_path.write_bytes(content)
+
+    wsdl_uri = f"file://{file_path}"
+    try:
+        parse_result = await soap_engine.parse_wsdl(wsdl_uri)
+    except Exception as exc:
+        file_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"WSDL non parseable par le moteur SOAP : {exc}",
+        )
+
+    if not parse_result["operations"]:
+        file_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Le WSDL ne contient aucune opération disponible",
+        )
+
+    return WsdlUploadResult(
+        wsdl_file_id=file_id,
+        wsdl_file_path=wsdl_uri,
+        operations=list(parse_result["operations"].keys()),
+        filename=filename,
+    )
+
+
+@router.post(
+    "",
     response_model=ConnectorRead,
     status_code=status.HTTP_201_CREATED,
     summary="Créer un connecteur",
     description=(
         "Crée un connecteur SOAP ou REST. "
-        "Le champ `wsdl_url` est obligatoire pour les connecteurs SOAP ; "
+        "Pour SOAP avec `wsdl_source=url` : `wsdl_url` est obligatoire. "
+        "Pour SOAP avec `wsdl_source=upload` : `wsdl_file_id` (retourné par `/upload-wsdl`) est obligatoire. "
         "`base_url` est obligatoire pour les connecteurs REST. "
         "La création est bloquée si le quota de connecteurs du plan est atteint (403)."
     ),
@@ -65,7 +165,7 @@ async def _get_connector(
         201: {"description": "Connecteur créé"},
         401: _401,
         403: {"description": "Quota de connecteurs atteint"},
-        422: {"description": "Champ obligatoire manquant (wsdl_url ou base_url)"},
+        422: {"description": "Champ obligatoire manquant"},
     },
 )
 async def create_connector(
@@ -96,12 +196,24 @@ async def create_connector(
     if payload.auth_config:
         encrypted_auth = {"_enc": crypto.encrypt(payload.auth_config)}
 
+    wsdl_file_path: str | None = None
+    if payload.wsdl_source == WsdlSource.upload and payload.wsdl_file_id:
+        expected = UPLOAD_DIR / f"{payload.wsdl_file_id}.wsdl"
+        if not expected.exists():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Fichier WSDL uploadé introuvable — veuillez uploader à nouveau",
+            )
+        wsdl_file_path = f"file://{expected}"
+
     connector = Connector(
         tenant_id=current_user.tenant_id,
         name=payload.name,
         type=payload.type.value,
         base_url=payload.base_url,
         wsdl_url=payload.wsdl_url,
+        wsdl_source=payload.wsdl_source.value,
+        wsdl_file_path=wsdl_file_path,
         auth_type=payload.auth_type.value,
         auth_config=encrypted_auth,
         headers=payload.headers,
@@ -115,7 +227,7 @@ async def create_connector(
 
 
 @router.get(
-    "/",
+    "",
     response_model=list[ConnectorRead],
     summary="Lister les connecteurs",
     description="Retourne tous les connecteurs du tenant courant, quel que soit leur statut.",
@@ -189,7 +301,11 @@ async def update_connector(
     "/{connector_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Supprimer un connecteur",
-    description="Supprime définitivement le connecteur et tout son historique d'exécutions.",
+    description=(
+        "Supprime définitivement le connecteur et tout son historique d'exécutions. "
+        "Si le connecteur utilise un fichier WSDL local (`wsdl_source=upload`), "
+        "le fichier est également supprimé du serveur."
+    ),
     responses={204: {"description": "Supprimé"}, 401: _401, 404: _404},
 )
 async def delete_connector(
@@ -198,6 +314,11 @@ async def delete_connector(
     db: AsyncSession = Depends(get_db),
 ) -> None:
     connector = await _get_connector(connector_id, current_user.tenant_id, db)
+
+    if connector.wsdl_source == "upload" and connector.wsdl_file_path:
+        local_path = pathlib.Path(connector.wsdl_file_path.replace("file://", ""))
+        local_path.unlink(missing_ok=True)
+
     await db.execute(delete(Execution).where(Execution.connector_id == connector_id))
     await db.delete(connector)
     await db.commit()
@@ -262,10 +383,13 @@ async def execute_connector(
     "/{connector_id}/test-wsdl",
     response_model=WSDLParseResult,
     summary="Analyser le WSDL",
-    description="Charge et analyse le WSDL du connecteur SOAP. Retourne la liste des opérations disponibles.",
+    description=(
+        "Charge et analyse le WSDL du connecteur SOAP. Retourne la liste des opérations disponibles. "
+        "Fonctionne avec les WSDL URL (`wsdl_source=url`) et les fichiers locaux (`wsdl_source=upload`)."
+    ),
     responses={
         200: {"description": "Opérations WSDL listées"},
-        400: {"description": "Connecteur non SOAP ou wsdl_url absent"},
+        400: {"description": "Connecteur non SOAP ou source WSDL absente"},
         401: _401,
         404: _404,
         502: _502,
@@ -284,14 +408,16 @@ async def test_wsdl(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only SOAP connectors support WSDL parsing",
         )
-    if not connector.wsdl_url:
+
+    wsdl_source = connector.wsdl_file_path or connector.wsdl_url
+    if not wsdl_source:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Connector has no wsdl_url configured",
+            detail="Connector has no WSDL source configured",
         )
 
     try:
-        result = await soap_engine.parse_wsdl(connector.wsdl_url)
+        result = await soap_engine.parse_wsdl(wsdl_source)
     except (SOAPConnectionError, WSDLLoadError) as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
     except SOAPTimeoutError as exc:

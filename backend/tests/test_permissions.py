@@ -225,7 +225,7 @@ async def test_connector_quota_blocks_creation(
     await db_session.commit()
 
     token = await _token_for(client, admin_user.email, "adminpass")
-    r = await client.post("/api/v1/connectors/", json={
+    r = await client.post("/api/v1/connectors", json={
         "name": "Over quota",
         "type": "rest",
         "base_url": "https://example.com",

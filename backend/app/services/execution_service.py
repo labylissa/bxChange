@@ -91,8 +91,9 @@ async def execute_connector(
     try:
         if connector.type == "soap":
             operation = call_params.pop("operation", "")
+            wsdl_source = connector.wsdl_file_path or connector.wsdl_url
             raw = await soap_engine.execute(
-                wsdl_url=connector.wsdl_url,
+                wsdl_url=wsdl_source,
                 operation=operation,
                 params=_coerce_soap_params(call_params),
                 auth_type=connector.auth_type,

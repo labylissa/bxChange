@@ -25,12 +25,18 @@ class ConnectorStatus(str, Enum):
     draft = "draft"
 
 
+class WsdlSource(str, Enum):
+    url = "url"
+    upload = "upload"
+
+
 class ConnectorCreate(BaseModel):
     model_config = ConfigDict(json_schema_extra={
         "example": {
             "name": "Calculator SOAP",
             "type": "soap",
             "wsdl_url": "http://www.dneonline.com/calculator.asmx?WSDL",
+            "wsdl_source": "url",
             "auth_type": "none",
             "auth_config": {},
             "headers": {},
@@ -42,6 +48,8 @@ class ConnectorCreate(BaseModel):
     type: ConnectorType
     base_url: str | None = None
     wsdl_url: str | None = None
+    wsdl_source: WsdlSource = WsdlSource.url
+    wsdl_file_id: str | None = None
     auth_type: AuthType = AuthType.none
     auth_config: dict | None = None
     headers: dict | None = None
@@ -49,8 +57,11 @@ class ConnectorCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_type_fields(self) -> "ConnectorCreate":
-        if self.type == ConnectorType.soap and not self.wsdl_url:
-            raise ValueError("SOAP connectors require wsdl_url")
+        if self.type == ConnectorType.soap:
+            if self.wsdl_source == WsdlSource.url and not self.wsdl_url:
+                raise ValueError("SOAP connectors with wsdl_source=url require wsdl_url")
+            if self.wsdl_source == WsdlSource.upload and not self.wsdl_file_id:
+                raise ValueError("SOAP connectors with wsdl_source=upload require wsdl_file_id")
         if self.type == ConnectorType.rest and not self.base_url:
             raise ValueError("REST connectors require base_url")
         return self
@@ -63,6 +74,8 @@ class ConnectorRead(BaseModel):
     type: str
     base_url: str | None
     wsdl_url: str | None
+    wsdl_source: str
+    wsdl_file_path: str | None
     auth_type: str
     status: str
     created_at: datetime
@@ -84,6 +97,13 @@ class ConnectorUpdate(BaseModel):
 class WSDLParseResult(BaseModel):
     operations: dict[str, dict]
     count: int
+
+
+class WsdlUploadResult(BaseModel):
+    wsdl_file_id: str
+    wsdl_file_path: str
+    operations: list[str]
+    filename: str
 
 
 class RestTestPayload(BaseModel):

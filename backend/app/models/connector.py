@@ -31,6 +31,13 @@ class Connector(Base):
         default="draft",
         nullable=False,
     )
+    wsdl_source: Mapped[str] = mapped_column(
+        Enum("url", "upload", name="wsdl_source_type"),
+        default="url",
+        server_default="url",
+        nullable=False,
+    )
+    wsdl_file_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id"), nullable=True
     )

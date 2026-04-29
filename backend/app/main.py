@@ -75,6 +75,7 @@ app = FastAPI(
     license_info={"name": "Propriétaire — Usage client uniquement"},
     docs_url="/docs",
     redoc_url="/redoc",
+    redirect_slashes=False,
 )
 
 

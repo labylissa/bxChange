@@ -32,7 +32,7 @@ async def _auth(client: AsyncClient) -> str:
 
 async def _connector(client: AsyncClient, token: str) -> str:
     r = await client.post(
-        "/api/v1/connectors/",
+        "/api/v1/connectors",
         json={
             "name": f"C-{uuid.uuid4().hex[:6]}",
             "type": "rest",

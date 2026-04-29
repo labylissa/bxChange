@@ -3,6 +3,7 @@ import apiClient from './client'
 export type ConnectorType = 'soap' | 'rest'
 export type AuthType = 'none' | 'basic' | 'bearer' | 'apikey' | 'oauth2'
 export type ConnectorStatus = 'active' | 'error' | 'disabled' | 'draft'
+export type WsdlSource = 'url' | 'upload'
 
 export interface Connector {
   id: string
@@ -11,6 +12,8 @@ export interface Connector {
   type: ConnectorType
   base_url: string | null
   wsdl_url: string | null
+  wsdl_source: WsdlSource
+  wsdl_file_path: string | null
   auth_type: AuthType
   status: ConnectorStatus
   created_at: string
@@ -21,6 +24,8 @@ export interface ConnectorCreate {
   type: ConnectorType
   base_url?: string
   wsdl_url?: string
+  wsdl_source?: WsdlSource
+  wsdl_file_id?: string
   auth_type?: AuthType
   auth_config?: Record<string, unknown>
   headers?: Record<string, string>
@@ -41,6 +46,13 @@ export interface ConnectorUpdate {
 export interface WSDLParseResult {
   operations: Record<string, Record<string, unknown>>
   count: number
+}
+
+export interface WsdlUploadResult {
+  wsdl_file_id: string
+  wsdl_file_path: string
+  operations: string[]
+  filename: string
 }
 
 export interface RestTestPayload {
@@ -89,6 +101,9 @@ export const connectorsApi = {
 
   deleteConnector: (id: string) =>
     apiClient.delete(`/api/v1/connectors/${id}`),
+
+  uploadWsdl: (form: FormData) =>
+    apiClient.post<WsdlUploadResult>('/api/v1/connectors/upload-wsdl', form).then((r) => r.data),
 
   testWsdl: (id: string) =>
     apiClient.post<WSDLParseResult>(`/api/v1/connectors/${id}/test-wsdl`).then((r) => r.data),

@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { X, Wifi, Globe, ChevronRight, ChevronLeft, Plus, Trash2 } from 'lucide-react'
+import { X, Wifi, Globe, ChevronRight, ChevronLeft, Plus, Trash2, Link, FolderOpen, Upload } from 'lucide-react'
 import type { ConnectorType, AuthType } from '@/lib/api/connectors'
 import { connectorsApi } from '@/lib/api/connectors'
 import { Button } from '@/components/ui/Button'
@@ -22,8 +22,13 @@ interface WizardState {
   // Step 1
   type: ConnectorType | null
   name: string
-  // Step 2 – SOAP
+  // Step 2 – SOAP source
+  wsdlSource: 'url' | 'upload'
   wsdlUrl: string
+  wsdlFile: File | null
+  wsdlFileId: string | null
+  wsdlFileName: string | null
+  uploadError: string | null
   wsdlOperations: string[]
   selectedOperation: string
   // Step 2 – REST
@@ -47,7 +52,9 @@ interface WizardState {
 
 const INITIAL: WizardState = {
   type: null, name: '',
-  wsdlUrl: '', wsdlOperations: [], selectedOperation: '',
+  wsdlSource: 'url',
+  wsdlUrl: '', wsdlFile: null, wsdlFileId: null, wsdlFileName: null, uploadError: null,
+  wsdlOperations: [], selectedOperation: '',
   baseUrl: '', method: 'GET', restPath: '', customHeaders: [{ key: '', value: '' }],
   authType: 'none', username: '', password: '',
   bearerToken: '', apiKeyName: 'X-API-Key', apiKeyValue: '', apiKeyIn: 'header',
@@ -72,6 +79,8 @@ function buildHeaders(pairs: HeaderPair[]): Record<string, string> {
 export function ConnectorWizard({ onClose }: Props) {
   const [step, setStep] = useState<Step>(1)
   const [s, setS] = useState<WizardState>(INITIAL)
+  const [isDragging, setIsDragging] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const qc = useQueryClient()
 
   function patch(partial: Partial<WizardState>) {
@@ -87,13 +96,13 @@ export function ConnectorWizard({ onClose }: Props) {
     onClose()
   }
 
-  // SOAP: create draft then test-wsdl
+  // SOAP URL mode: create draft then test-wsdl
   const loadWsdl = useMutation({
     mutationFn: async () => {
       let connId = s.draftConnectorId
       if (!connId) {
         const conn = await connectorsApi.createConnector({
-          name: s.name, type: 'soap', wsdl_url: s.wsdlUrl, auth_type: 'none',
+          name: s.name, type: 'soap', wsdl_url: s.wsdlUrl, wsdl_source: 'url', auth_type: 'none',
         })
         connId = conn.id
         patch({ draftConnectorId: conn.id })
@@ -104,6 +113,41 @@ export function ConnectorWizard({ onClose }: Props) {
     },
     onSuccess: (data) => {
       patch({ wsdlOperations: Object.keys(data.operations), selectedOperation: Object.keys(data.operations)[0] ?? '' })
+    },
+  })
+
+  // SOAP upload mode: upload file, then create draft connector
+  const uploadAndLoad = useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData()
+      form.append('file', file)
+      const uploaded = await connectorsApi.uploadWsdl(form)
+
+      let connId = s.draftConnectorId
+      if (!connId) {
+        const conn = await connectorsApi.createConnector({
+          name: s.name,
+          type: 'soap',
+          wsdl_source: 'upload',
+          wsdl_file_id: uploaded.wsdl_file_id,
+          auth_type: 'none',
+        })
+        connId = conn.id
+      }
+      return { uploaded, connId }
+    },
+    onSuccess: ({ uploaded, connId }) => {
+      patch({
+        wsdlFileId: uploaded.wsdl_file_id,
+        wsdlFileName: uploaded.filename,
+        wsdlOperations: uploaded.operations,
+        selectedOperation: uploaded.operations[0] ?? '',
+        draftConnectorId: connId,
+        uploadError: null,
+      })
+    },
+    onError: (err: Error) => {
+      patch({ uploadError: err.message })
     },
   })
 
@@ -151,13 +195,18 @@ export function ConnectorWizard({ onClose }: Props) {
   }
 
   function handleConfirm() {
-    // Connector already created — just activate it and close
     if (s.draftConnectorId) {
       connectorsApi.updateConnector(s.draftConnectorId, { status: 'active' })
-        .catch(() => {/* status update is best-effort */ })
+        .catch(() => {/* best-effort */ })
     }
     qc.invalidateQueries({ queryKey: ['connectors'] })
     onClose()
+  }
+
+  function handleFileSelect(file: File | undefined) {
+    if (!file) return
+    patch({ wsdlFile: file, wsdlFileId: null, wsdlFileName: null, wsdlOperations: [], uploadError: null })
+    uploadAndLoad.reset()
   }
 
   const isTesting = testRest.isPending || testSoap.isPending
@@ -201,29 +250,129 @@ export function ConnectorWizard({ onClose }: Props) {
     if (s.type === 'soap') {
       return (
         <div className="flex flex-col gap-4">
-          <div className="flex gap-2 items-end">
-            <div className="flex-1">
-              <Input
-                label="URL du WSDL"
-                placeholder="http://legacy.corp.local:8080/service?wsdl"
-                value={s.wsdlUrl}
-                onChange={(e) => patch({ wsdlUrl: e.target.value })}
-              />
-            </div>
-            <Button
-              variant="secondary"
-              onClick={() => loadWsdl.mutate()}
-              loading={loadWsdl.isPending}
-              disabled={!s.wsdlUrl}
+          {/* Source toggle */}
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => patch({ wsdlSource: 'url', wsdlFile: null, wsdlFileId: null, wsdlFileName: null, wsdlOperations: [], uploadError: null })}
+              className={`flex items-center gap-2 px-4 py-3 rounded-xl border-2 text-sm font-medium transition-colors ${
+                s.wsdlSource === 'url'
+                  ? 'border-brand-600 bg-brand-50 text-brand-700'
+                  : 'border-gray-200 hover:border-gray-300 text-gray-600'
+              }`}
             >
-              Charger
-            </Button>
+              <Link className="h-4 w-4 flex-shrink-0" />
+              URL WSDL
+            </button>
+            <button
+              onClick={() => patch({ wsdlSource: 'upload', wsdlUrl: '', wsdlOperations: [] })}
+              className={`flex items-center gap-2 px-4 py-3 rounded-xl border-2 text-sm font-medium transition-colors ${
+                s.wsdlSource === 'upload'
+                  ? 'border-brand-600 bg-brand-50 text-brand-700'
+                  : 'border-gray-200 hover:border-gray-300 text-gray-600'
+              }`}
+            >
+              <FolderOpen className="h-4 w-4 flex-shrink-0" />
+              Fichier .wsdl local
+            </button>
           </div>
-          {loadWsdl.isError && (
-            <p className="text-sm text-red-600">
-              Impossible de charger le WSDL : {(loadWsdl.error as Error).message}
-            </p>
+
+          {/* URL mode */}
+          {s.wsdlSource === 'url' && (
+            <>
+              <div className="flex gap-2 items-end">
+                <div className="flex-1">
+                  <Input
+                    label="URL du WSDL"
+                    placeholder="http://legacy.corp.local:8080/service?wsdl"
+                    value={s.wsdlUrl}
+                    onChange={(e) => patch({ wsdlUrl: e.target.value })}
+                  />
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={() => loadWsdl.mutate()}
+                  loading={loadWsdl.isPending}
+                  disabled={!s.wsdlUrl}
+                >
+                  Charger
+                </Button>
+              </div>
+              {loadWsdl.isError && (
+                <p className="text-sm text-red-600">
+                  Impossible de charger le WSDL : {(loadWsdl.error as Error).message}
+                </p>
+              )}
+            </>
           )}
+
+          {/* Upload mode */}
+          {s.wsdlSource === 'upload' && (
+            <>
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Fichier WSDL</p>
+                <div
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    setIsDragging(false)
+                    handleFileSelect(e.dataTransfer.files[0])
+                  }}
+                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl p-6 cursor-pointer transition-colors ${
+                    isDragging
+                      ? 'border-brand-400 bg-brand-50'
+                      : s.wsdlFile
+                      ? 'border-green-400 bg-green-50'
+                      : 'border-gray-300 hover:border-gray-400 bg-gray-50'
+                  }`}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".wsdl,.xml"
+                    className="hidden"
+                    onChange={(e) => handleFileSelect(e.target.files?.[0])}
+                  />
+                  <Upload className={`h-8 w-8 ${s.wsdlFile ? 'text-green-500' : 'text-gray-400'}`} />
+                  {s.wsdlFile ? (
+                    <div className="text-center">
+                      <p className="text-sm font-medium text-green-700">{s.wsdlFile.name}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {(s.wsdlFile.size / 1024).toFixed(1)} KB — cliquer pour changer
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      <p className="text-sm text-gray-600">
+                        Glissez votre fichier .wsdl ici
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">ou cliquez pour sélectionner</p>
+                      <p className="text-xs text-gray-400 mt-1">Formats : .wsdl, .xml — max 5 MB</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <Button
+                variant="secondary"
+                onClick={() => s.wsdlFile && uploadAndLoad.mutate(s.wsdlFile)}
+                loading={uploadAndLoad.isPending}
+                disabled={!s.wsdlFile}
+                className="self-start"
+              >
+                Analyser le fichier
+              </Button>
+
+              {s.uploadError && (
+                <p className="text-sm text-red-600">
+                  Ce fichier n'est pas un WSDL valide : {s.uploadError}
+                </p>
+              )}
+            </>
+          )}
+
+          {/* Operations (shared URL + upload) */}
           {s.wsdlOperations.length > 0 && (
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-gray-700">
@@ -409,7 +558,10 @@ export function ConnectorWizard({ onClose }: Props) {
   function canAdvance(): boolean {
     if (step === 1) return !!s.type && s.name.trim().length > 0
     if (step === 2) {
-      if (s.type === 'soap') return s.wsdlUrl.trim().length > 0 && s.wsdlOperations.length > 0
+      if (s.type === 'soap') {
+        if (s.wsdlSource === 'url') return s.wsdlUrl.trim().length > 0 && s.wsdlOperations.length > 0
+        return s.wsdlFileId !== null && s.wsdlOperations.length > 0
+      }
       return s.baseUrl.trim().length > 0
     }
     if (step === 3) return true

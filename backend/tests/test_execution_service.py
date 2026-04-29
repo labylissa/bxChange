@@ -34,7 +34,7 @@ async def _register_login(client: AsyncClient) -> str:
 
 async def _create_rest_connector(client: AsyncClient, token: str) -> str:
     r = await client.post(
-        "/api/v1/connectors/",
+        "/api/v1/connectors",
         json={"name": "REST Test", "type": "rest", "base_url": "https://api.example.com"},
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -44,7 +44,7 @@ async def _create_rest_connector(client: AsyncClient, token: str) -> str:
 
 async def _create_soap_connector(client: AsyncClient, token: str) -> str:
     r = await client.post(
-        "/api/v1/connectors/",
+        "/api/v1/connectors",
         json={"name": "SOAP Test", "type": "soap", "wsdl_url": "https://example.com/service?wsdl"},
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -196,7 +196,7 @@ async def test_list_executions_filter_status(client: AsyncClient):
     ):
         await client.post(f"/api/v1/connectors/{cid}/execute", json={"params": {}}, headers=headers)
 
-    r = await client.get("/api/v1/executions/?status=error", headers=headers)
+    r = await client.get("/api/v1/executions?status=error", headers=headers)
     assert r.status_code == 200
     items = r.json()
     assert all(e["status"] == "error" for e in items)
@@ -219,7 +219,7 @@ async def test_list_executions_filter_connector(client: AsyncClient):
         await client.post(f"/api/v1/connectors/{cid_a}/execute", json={"params": {}}, headers=headers)
         await client.post(f"/api/v1/connectors/{cid_b}/execute", json={"params": {}}, headers=headers)
 
-    r = await client.get(f"/api/v1/executions/?connector_id={cid_a}", headers=headers)
+    r = await client.get(f"/api/v1/executions?connector_id={cid_a}", headers=headers)
     assert r.status_code == 200
     items = r.json()
     assert all(e["connector_id"] == cid_a for e in items)
@@ -272,16 +272,16 @@ async def test_list_executions_pagination(client: AsyncClient, db_session: Async
         )
     await db_session.commit()
 
-    r1 = await client.get(f"/api/v1/executions/?connector_id={cid}&page=1&page_size=5", headers=headers)
+    r1 = await client.get(f"/api/v1/executions?connector_id={cid}&page=1&page_size=5", headers=headers)
     assert r1.status_code == 200
     assert len(r1.json()) == 5
 
-    r2 = await client.get(f"/api/v1/executions/?connector_id={cid}&page=2&page_size=5", headers=headers)
+    r2 = await client.get(f"/api/v1/executions?connector_id={cid}&page=2&page_size=5", headers=headers)
     assert r2.status_code == 200
     assert len(r2.json()) == 5
 
     # page 3 should have the remaining 2
-    r3 = await client.get(f"/api/v1/executions/?connector_id={cid}&page=3&page_size=5", headers=headers)
+    r3 = await client.get(f"/api/v1/executions?connector_id={cid}&page=3&page_size=5", headers=headers)
     assert r3.status_code == 200
     assert len(r3.json()) == 2
 

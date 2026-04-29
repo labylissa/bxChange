@@ -36,7 +36,7 @@ async def _auth(client: AsyncClient) -> str:
 async def _create_key(client: AsyncClient, token: str, **kwargs) -> dict:
     payload = {"name": "test-key", **kwargs}
     r = await client.post(
-        "/api/v1/api-keys/",
+        "/api/v1/api-keys",
         json=payload,
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -46,7 +46,7 @@ async def _create_key(client: AsyncClient, token: str, **kwargs) -> dict:
 
 async def _connector(client: AsyncClient, token: str) -> str:
     r = await client.post(
-        "/api/v1/connectors/",
+        "/api/v1/connectors",
         json={"name": f"C-{uuid.uuid4().hex[:6]}", "type": "rest", "base_url": "https://api.example.com"},
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -85,7 +85,7 @@ async def test_key_hash_never_exposed(client: AsyncClient):
 
     # Check creation response — already tested above
     # Check list response
-    r = await client.get("/api/v1/api-keys/", headers=headers)
+    r = await client.get("/api/v1/api-keys", headers=headers)
     assert r.status_code == 200
     for item in r.json():
         assert "key_hash" not in item
@@ -257,10 +257,10 @@ async def test_tenant_isolation_list(client: AsyncClient):
     await _create_key(client, token2, name="key-c")
 
     r1 = await client.get(
-        "/api/v1/api-keys/", headers={"Authorization": f"Bearer {token1}"}
+        "/api/v1/api-keys", headers={"Authorization": f"Bearer {token1}"}
     )
     r2 = await client.get(
-        "/api/v1/api-keys/", headers={"Authorization": f"Bearer {token2}"}
+        "/api/v1/api-keys", headers={"Authorization": f"Bearer {token2}"}
     )
 
     assert r1.status_code == 200

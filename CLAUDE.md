@@ -337,14 +337,63 @@ DELETE /api/v1/api-keys/{id}           ← révoquer
 |--------|----------|--------|
 | S12 | Multi-tenant avancé + Super Admin + Quotas | ✅ Done |
 | S13 | Documentation API Swagger + Page API Docs dashboard | ✅ Done |
-| S14 | OAuth2, mTLS, 2FA | 🔜 |
-| S15 | Row-Level Security, Audit logs | 🔜 |
+| S14 | Upload WSDL local (fichier .wsdl sans URL) | ✅ Done |
+| S15 | OAuth2, mTLS, 2FA | 🔜 |
+| S16 | Row-Level Security, Audit logs | 🔜 |
 
 ### Phase 4 — SaaS Commercial (Sprint 15–17)
 - Billing Stripe, Self-service onboarding, White label
 
 ### Phase 5 — IA (Sprint 18+)
 - Mapping XML→JSON automatique par LLM
+
+---
+
+## 📁 Upload WSDL Local (Sprint 14)
+
+### Endpoint
+
+```
+POST /api/v1/connectors/upload-wsdl
+Content-Type: multipart/form-data
+Authorization: Bearer {token}
+
+file: <fichier .wsdl ou .xml, max 5 MB>
+```
+
+**Réponse :**
+```json
+{
+  "wsdl_file_id": "uuid",
+  "wsdl_file_path": "file:///app/uploads/wsdl/uuid.wsdl",
+  "operations": ["Add", "Subtract"],
+  "filename": "monservice.wsdl"
+}
+```
+
+### Création d'un connecteur avec fichier local
+
+```json
+{
+  "name": "Mon Connecteur SOAP",
+  "type": "soap",
+  "wsdl_source": "upload",
+  "wsdl_file_id": "<uuid retourné par /upload-wsdl>",
+  "auth_type": "none"
+}
+```
+
+### Stockage des fichiers
+
+- Fichiers sauvegardés dans `/app/uploads/wsdl/{uuid}.wsdl` côté container
+- Volume Docker : `./uploads:/app/uploads` (persistance entre restarts)
+- Suppression automatique à la suppression du connecteur (`DELETE /connectors/{id}`)
+
+### Variables d'environnement
+
+```env
+WSDL_UPLOAD_DIR=/app/uploads/wsdl  # override pour les tests (default: /app/uploads/wsdl)
+```
 
 ---
 

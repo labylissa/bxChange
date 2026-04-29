@@ -21,7 +21,7 @@ _404 = {"description": "Exécution introuvable"}
 
 
 @router.get(
-    "/",
+    "",
     response_model=list[ExecutionRead],
     summary="Historique des exécutions",
     description=(

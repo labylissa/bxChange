@@ -20,7 +20,7 @@ _404 = {"description": "Clé API introuvable"}
 
 
 @router.get(
-    "/",
+    "",
     response_model=list[ApiKeyRead],
     summary="Lister les clés API",
     description="Retourne toutes les clés API du tenant (actives et révoquées). La valeur brute n'est jamais retournée.",
@@ -37,7 +37,7 @@ async def list_api_keys(
 
 
 @router.post(
-    "/",
+    "",
     response_model=ApiKeyCreated,
     status_code=status.HTTP_201_CREATED,
     summary="Créer une clé API",
