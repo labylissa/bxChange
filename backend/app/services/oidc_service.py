@@ -13,10 +13,20 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 import httpx
-from authlib.integrations.httpx_client import AsyncOAuth2Client
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+
+def _get_oauth2_client():
+    try:
+        from authlib.integrations.httpx_client import AsyncOAuth2Client
+        return AsyncOAuth2Client
+    except ImportError:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="authlib is not installed. Rebuild the container with OIDC dependencies.",
+        )
 
 from app.services.saml_service import _random_unusable_hash, jit_provision
 
@@ -69,6 +79,7 @@ async def get_authorization_url(
     discovery = await get_well_known(sso_config.sso_url)
     auth_endpoint = discovery["authorization_endpoint"]
     client_secret = _get_client_secret(sso_config)
+    AsyncOAuth2Client = _get_oauth2_client()
 
     client = AsyncOAuth2Client(
         client_id=sso_config.entity_id,
@@ -96,6 +107,7 @@ async def exchange_code(
     userinfo_endpoint = discovery.get("userinfo_endpoint", "")
     client_secret = _get_client_secret(sso_config)
     mapping = _get_oidc_mapping(sso_config)
+    AsyncOAuth2Client = _get_oauth2_client()
 
     client = AsyncOAuth2Client(
         client_id=sso_config.entity_id,
