@@ -7,6 +7,7 @@ import apiClient from '@/lib/api/client'
 import { useAuthStore } from '@/stores/authStore'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { SSOLoginButton } from './SSOLoginButton'
 
 const schema = z.object({
   email: z.string().email('Email invalide'),
@@ -72,6 +73,17 @@ export function LoginPage() {
               Se connecter
             </Button>
           </form>
+        </div>
+
+        <div className="mt-4">
+          <div className="relative flex items-center">
+            <div className="flex-1 border-t border-gray-200" />
+            <span className="mx-3 text-xs text-gray-400">ou</span>
+            <div className="flex-1 border-t border-gray-200" />
+          </div>
+          <div className="mt-3">
+            <SSOLoginButton />
+          </div>
         </div>
 
         <p className="mt-4 text-center text-sm text-gray-600">

@@ -338,8 +338,9 @@ DELETE /api/v1/api-keys/{id}           ← révoquer
 | S12 | Multi-tenant avancé + Super Admin + Quotas | ✅ Done |
 | S13 | Documentation API Swagger + Page API Docs dashboard | ✅ Done |
 | S14 | Upload WSDL local (fichier .wsdl sans URL) | ✅ Done |
-| S15 | OAuth2, mTLS, 2FA | 🔜 |
-| S16 | Row-Level Security, Audit logs | 🔜 |
+| S15 | SSO Enterprise — SAML 2.0 / OIDC / SCIM 2.0 (JIT provisioning) | ✅ Done |
+| S16 | OAuth2, mTLS, 2FA | 🔜 |
+| S17 | Row-Level Security, Audit logs | 🔜 |
 
 ### Phase 4 — SaaS Commercial (Sprint 15–17)
 - Billing Stripe, Self-service onboarding, White label

@@ -16,6 +16,7 @@ import { APIDocsPage } from '@/features/docs/APIDocsPage'
 import { AdminPage } from '@/features/admin/AdminPage'
 import { TenantsPage } from '@/features/admin/TenantsPage'
 import { TenantDetailPage } from '@/features/admin/TenantDetailPage'
+import { SSOConfigPage } from '@/features/sso/SSOConfigPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,9 +44,10 @@ export default function App() {
               <Route path="/dashboard/api-docs" element={<APIDocsPage />} />
               <Route path="/dashboard/settings" element={<SettingsPage />} />
 
-              {/* Admin only: team management */}
+              {/* Admin only: team management + SSO */}
               <Route element={<RoleGuard requiredRole="admin" />}>
                 <Route path="/dashboard/team" element={<TeamPage />} />
+                <Route path="/dashboard/sso" element={<SSOConfigPage />} />
               </Route>
             </Route>
 

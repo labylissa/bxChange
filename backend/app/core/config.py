@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:5173"]
     super_admin_email: str = ""
     super_admin_password: str = ""
+    # SSO / SP settings
+    sp_entity_id: str = "https://app.bxchange.io"
+    sp_acs_url: str = "https://app.bxchange.io/api/v1/sso/acs"
+    sp_certificate: str = ""   # PEM, no headers, single line
+    sp_private_key: str = ""   # PEM, no headers, single line
 
     model_config = {"env_file": ".env"}
 
