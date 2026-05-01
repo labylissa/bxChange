@@ -6,6 +6,7 @@ celery_app = Celery(
     "bxchange",
     broker=settings.redis_url,
     backend=settings.redis_url,
+    include=["app.workers.tasks"],
 )
 
 celery_app.conf.task_serializer = "json"
