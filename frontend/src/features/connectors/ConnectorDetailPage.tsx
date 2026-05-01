@@ -13,6 +13,7 @@ import { Tabs } from '@/components/ui/Tabs'
 import { JsonViewer } from '@/components/ui/JsonViewer'
 import { ScheduledJobsPage } from '@/features/scheduled-jobs/ScheduledJobsPage'
 import { WebhooksPage } from '@/features/webhooks/WebhooksPage'
+import { IntegrationTab } from './IntegrationTab'
 
 const TABS = [
   { id: 'overview', label: 'Vue générale' },
@@ -21,6 +22,7 @@ const TABS = [
   { id: 'history', label: 'Historique' },
   { id: 'schedule', label: 'Planification' },
   { id: 'webhooks', label: 'Webhooks' },
+  { id: 'integration', label: 'Intégration' },
 ]
 
 function statusVariant(status: string): 'green' | 'red' | 'gray' | 'yellow' {
@@ -427,6 +429,7 @@ export function ConnectorDetailPage() {
         <div className={activeTab !== 'history' ? 'hidden' : ''}><HistoryTab connectorId={connector.id} /></div>
         <div className={activeTab !== 'schedule' ? 'hidden' : ''}><ScheduledJobsPage connectorId={connector.id} /></div>
         <div className={activeTab !== 'webhooks' ? 'hidden' : ''}><WebhooksPage connectorId={connector.id} /></div>
+        <div className={activeTab !== 'integration' ? 'hidden' : ''}><IntegrationTab connectorId={connector.id} connectorName={connector.name} /></div>
       </div>
     </div>
   )

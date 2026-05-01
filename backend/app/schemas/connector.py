@@ -177,3 +177,10 @@ class PreviewTransformPayload(BaseModel):
 
     raw_xml: str
     transform_config: dict | None = None
+
+
+class SnippetResponse(BaseModel):
+    lang: str
+    connector_id: str
+    connector_name: str
+    snippet: str

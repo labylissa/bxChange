@@ -1,5 +1,6 @@
 import os
 import pathlib
+import re
 import uuid
 import xml.etree.ElementTree as ET
 from typing import Annotated
@@ -19,12 +20,13 @@ from app.schemas.connector import (
     ConnectorUpdate,
     PreviewTransformPayload,
     RestTestPayload,
+    SnippetResponse,
     WSDLParseResult,
     WsdlSource,
     WsdlUploadResult,
 )
 from app.schemas.execution import ExecuteRequest, ExecuteResponse
-from app.services import crypto, execution_service, rest_engine, soap_engine, transformer
+from app.services import crypto, execution_service, rest_engine, snippet_generator, soap_engine, transformer
 from app.services.execution_service import ConnectorNotFoundError
 from app.services.rest_engine import RESTConnectionError, RESTResponseError, RESTSSLError, RESTTimeoutError
 from app.services.soap_engine import SOAPConnectionError, SOAPTimeoutError, WSDLLoadError
@@ -494,6 +496,70 @@ async def test_rest(
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
     except RESTResponseError as exc:
         return {"status_code": exc.status_code, "body": exc.body, "headers": {}}
+
+
+@router.get(
+    "/{connector_id}/snippet",
+    response_model=SnippetResponse,
+    summary="Générer un snippet de code",
+    description=(
+        "Retourne un snippet de code prêt à copier pour intégrer ce connecteur depuis n'importe quel langage.\n\n"
+        "**Langues supportées :** `curl`, `python`, `javascript`, `php`, `java`\n\n"
+        "Si `api_key_id` est fourni, le snippet utilise le nom de la clé comme placeholder au lieu de `YOUR_API_KEY`."
+    ),
+    responses={
+        200: {"description": "Snippet généré"},
+        401: _401,
+        404: _404,
+        422: {"description": "Langue non supportée"},
+    },
+)
+async def get_snippet(
+    connector_id: uuid.UUID,
+    lang: str = "curl",
+    api_key_id: str | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> SnippetResponse:
+    if lang not in snippet_generator.SUPPORTED_LANGS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"lang must be one of {sorted(snippet_generator.SUPPORTED_LANGS)}",
+        )
+
+    connector = await _get_connector(connector_id, current_user.tenant_id, db)
+
+    key_hint: str | None = None
+    if api_key_id:
+        try:
+            from app.models.api_key import ApiKey
+            key_uuid = uuid.UUID(api_key_id)
+            api_key = (await db.execute(
+                select(ApiKey).where(
+                    ApiKey.id == key_uuid,
+                    ApiKey.tenant_id == current_user.tenant_id,
+                    ApiKey.is_active.is_(True),
+                )
+            )).scalar_one_or_none()
+            if api_key:
+                slug = re.sub(r'[^a-zA-Z0-9]+', '_', api_key.name).strip('_').lower()
+                key_hint = f"bxc_{slug}"
+        except (ValueError, Exception):
+            pass
+
+    snippet = snippet_generator.generate_snippet(
+        connector_id=str(connector.id),
+        connector_name=connector.name,
+        lang=lang,
+        api_key_hint=key_hint,
+    )
+
+    return SnippetResponse(
+        lang=lang,
+        connector_id=str(connector.id),
+        connector_name=connector.name,
+        snippet=snippet,
+    )
 
 
 @router.post(
