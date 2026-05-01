@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Pencil, UserX, Power } from 'lucide-react'
+import { ArrowLeft, Pencil, Power } from 'lucide-react'
 import { adminApi } from '@/lib/api/admin'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'

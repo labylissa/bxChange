@@ -88,9 +88,10 @@ export function ScheduledJobForm({ connectorId, existing, onSuccess, onCancel }:
       })
       if (!result.success) {
         const errs: Record<string, string> = {}
-        result.error.errors.forEach((e) => {
-          errs[e.path[0] as string] = e.message
-        })
+        for (const issue of result.error.issues) {
+          const key = issue.path[0]
+          if (key !== undefined) errs[String(key)] = issue.message
+        }
         setErrors(errs)
         throw new Error('Validation failed')
       }

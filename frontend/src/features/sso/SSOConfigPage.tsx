@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Shield, Plus, Trash2, Copy, Check, Key } from 'lucide-react'
-import { ssoApi, type SSOConfig, type SSOConfigCreate, type ScimToken, type ScimTokenCreated } from '@/lib/api/sso'
+import { ssoApi, type SSOConfig, type SSOConfigCreate, type ScimTokenCreated } from '@/lib/api/sso'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
@@ -275,7 +275,7 @@ function ScimTokensSection() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant={t.is_active ? 'success' : 'error'}>
+                <Badge variant={t.is_active ? 'green' : 'red'}>
                   {t.is_active ? 'Actif' : 'Révoqué'}
                 </Badge>
                 {t.is_active && (
@@ -297,7 +297,7 @@ function ScimTokensSection() {
           title="Révoquer ce token SCIM ?"
           message="Les provisions en cours via ce token seront interrompues."
           confirmLabel="Révoquer"
-          variant="danger"
+          danger
           onConfirm={() => revoke.mutate(toRevoke)}
           onCancel={() => setToRevoke(null)}
         />
@@ -363,10 +363,10 @@ export function SSOConfigPage() {
       ) : hasConfig && !editing ? (
         <Card className="p-5 flex flex-col gap-3">
           <div className="flex items-center gap-2">
-            <Badge variant={config.is_active ? 'success' : 'error'}>
+            <Badge variant={config.is_active ? 'green' : 'red'}>
               {config.is_active ? 'Actif' : 'Désactivé'}
             </Badge>
-            <Badge variant="default">{config.idp_type.toUpperCase()}</Badge>
+            <Badge variant="gray">{config.idp_type.toUpperCase()}</Badge>
           </div>
           <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
             <div>
@@ -404,7 +404,7 @@ export function SSOConfigPage() {
           title="Supprimer la configuration SSO ?"
           message="Les utilisateurs SSO ne pourront plus se connecter. Les comptes créés par JIT provisioning sont conservés."
           confirmLabel="Supprimer"
-          variant="danger"
+          danger
           onConfirm={() => deleteConfig.mutate()}
           onCancel={() => setConfirmDelete(false)}
         />

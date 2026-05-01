@@ -158,4 +158,21 @@ async def execute_connector(
     await db.commit()
     await db.refresh(execution)
 
+    # Dispatch webhooks — best-effort, never blocks the response
+    try:
+        from app.services import webhook_dispatcher
+        await webhook_dispatcher.dispatch(
+            execution_id=execution.id,
+            connector_id=connector_id,
+            connector_name=connector.name,
+            tenant_id=tenant_id,
+            triggered_by=triggered_by,
+            status=status,
+            duration_ms=duration_ms,
+            result=result_data,
+            db=db,
+        )
+    except Exception:
+        pass
+
     return ExecutionRead.model_validate(execution)

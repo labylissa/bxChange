@@ -22,7 +22,7 @@ export function SSOLoginButton({ onRedirect }: Props) {
     setError('')
     setLoading(true)
     try {
-      const hint = await ssoApi.getDomainHint(domain.trim().toLowerCase())
+      await ssoApi.getDomainHint(domain.trim().toLowerCase())
       // Build SAML redirect URL
       const redirectUrl = `/api/v1/sso/login?domain=${encodeURIComponent(domain.trim())}&return_to=${encodeURIComponent(window.location.origin + '/dashboard')}`
       if (onRedirect) {
