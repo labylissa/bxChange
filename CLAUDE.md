@@ -339,7 +339,7 @@ DELETE /api/v1/api-keys/{id}           ← révoquer
 | S13 | Documentation API Swagger + Page API Docs dashboard | ✅ Done |
 | S14 | Upload WSDL local (fichier .wsdl sans URL) | ✅ Done |
 | S15 | SSO Enterprise — SAML 2.0 / OIDC / SCIM 2.0 (JIT provisioning) | ✅ Done |
-| S16 | OAuth2, mTLS, 2FA | 🔜 |
+| S16 | Connector Pro — OAuth2 CC, WS-Security, retry avancé, body template, force_list_paths, advanced_config frontend | ✅ Done |
 | S17 | Row-Level Security, Audit logs | 🔜 |
 
 ### Phase 4 — SaaS Commercial (Sprint 15–17)
@@ -395,6 +395,57 @@ file: <fichier .wsdl ou .xml, max 5 MB>
 ```env
 WSDL_UPLOAD_DIR=/app/uploads/wsdl  # override pour les tests (default: /app/uploads/wsdl)
 ```
+
+---
+
+## ⚙️ Connector Pro — Advanced Config (Sprint 16)
+
+Le champ `advanced_config` (JSON) permet de configurer des options avancées par connecteur.
+
+### SOAP Advanced Config
+
+```json
+{
+  "service_name": "CalculatorService",
+  "port_name": "CalculatorSoap",
+  "operation_timeout": 60,
+  "custom_headers": { "X-Tenant": "acme" },
+  "ws_security": {
+    "type": "username_token",
+    "username": "user",
+    "password": "pass"
+  },
+  "response_path": "Body.Result",
+  "force_list_paths": ["Item", "Row"]
+}
+```
+
+### REST Advanced Config
+
+```json
+{
+  "headers": { "X-Custom": "value" },
+  "query_params": { "version": "2" },
+  "retry_count": 5,
+  "retry_backoff": 2.0,
+  "retry_on_codes": [429, 502, 503, 504],
+  "response_path": "$.data.items",
+  "body_template": "{\"name\": \"{name}\", \"qty\": {qty}}",
+  "oauth2_client_credentials": {
+    "token_url": "https://auth.example.com/token",
+    "client_id": "cid",
+    "client_secret": "csecret",
+    "scope": "read:api",
+    "token_cache_ttl": 3600
+  }
+}
+```
+
+**Notes :**
+- `body_template` : placeholders `{variable}` remplacés par les `params` d'exécution (regex-safe pour JSON)
+- `response_path` SOAP : notation pointée (`Body.Result`)
+- `response_path` REST : notation JSONPath (`$.data.items`)
+- Token OAuth2 mis en cache dans Redis avec la clé `oauth2:{connector_id}`
 
 ---
 
