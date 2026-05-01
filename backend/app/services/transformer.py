@@ -37,6 +37,17 @@ def _find_key(data: dict, local_name: str) -> str | None:
     return None
 
 
+def _apply_dot_path(data: Any, path: str) -> Any:
+    """Navigate a dot-separated key path into nested dicts. Returns original data if any segment is missing."""
+    current = data
+    for segment in path.split('.'):
+        if isinstance(current, dict) and segment in current:
+            current = current[segment]
+        else:
+            return data
+    return current
+
+
 def unwrap_soap(data: dict) -> dict:
     """Strip the SOAP 1.1/1.2 Envelope > Body wrapper, returning the Body content."""
     envelope_key = _find_key(data, "Envelope")
@@ -118,9 +129,18 @@ def normalize_arrays(data: Any, array_keys: frozenset[str] | None = None) -> Any
 
 # ── E) Mapping ─────────────────────────────────────────────────────────────────
 
-def apply_mapping(data: dict, config: dict) -> dict:
-    """Apply field-level transformations in order: exclude → select → rename → flatten."""
-    if not config or not isinstance(data, dict):
+def apply_mapping(data: Any, config: dict) -> Any:
+    """Apply field-level transformations in order: exclude → select → rename → flatten → item_map."""
+    if not config:
+        return data
+
+    if isinstance(data, list):
+        item_map = config.get("item_map")
+        if item_map:
+            return [apply_mapping(item, item_map) if isinstance(item, dict) else item for item in data]
+        return data
+
+    if not isinstance(data, dict):
         return data
 
     # exclude
@@ -194,15 +214,24 @@ def transform_with_steps(
 ) -> dict:
     """Run the full pipeline and return each intermediate step."""
     config = transform_config or {}
-    force_list_paths: list[str] = config.get("force_list_paths", [])
+    # Support "force_list" as alias for "force_list_paths"
+    force_list_paths: list[str] = config.get("force_list_paths") or config.get("force_list") or []
 
     data = _parse(raw, force_list_paths or None)
 
     after_unwrap = unwrap_soap(data)
     after_clean = clean_namespaces(after_unwrap)
 
+    # Apply response_path: extract nested value before normalization/mapping
+    after_path: Any = after_clean
+    response_path: str | None = config.get("response_path")
+    if response_path and isinstance(after_clean, dict):
+        extracted = _apply_dot_path(after_clean, response_path)
+        if extracted is not after_clean:
+            after_path = extracted
+
     array_keys = frozenset(config.get("arrays", []))
-    after_normalize = normalize_arrays(after_clean, array_keys)
+    after_normalize = normalize_arrays(after_path, array_keys)
 
     after_mapping = apply_mapping(after_normalize, config)
     final = finalize(after_mapping)

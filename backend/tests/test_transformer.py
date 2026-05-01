@@ -229,3 +229,37 @@ def test_namespace_cleanup_strips_prefix():
     xml = '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Data>42</Data></soap:Body></soap:Envelope>'
     result = transform(xml)
     assert result == {"Data": 42}
+
+
+# ── Sprint 16-bis — response_path, force_list alias, item_map ─────────────────
+
+def test_response_path_extracts_nested_value():
+    xml = "<Root><Inner><Value>42</Value></Inner></Root>"
+    result = transform(xml, {"response_path": "Root.Inner"})
+    assert result == {"Value": 42}
+
+
+def test_response_path_no_match_returns_full_data():
+    xml = "<Root><Value>1</Value></Root>"
+    result = transform(xml, {"response_path": "Root.NonExistent.Deep"})
+    assert "Root" in result
+
+
+def test_force_list_alias_works_same_as_force_list_paths():
+    xml = "<Items><Item>one</Item></Items>"
+    result = transform(xml, {"force_list": ["Item"]})
+    assert isinstance(result["Items"]["Item"], list)
+    assert result["Items"]["Item"] == ["one"]
+
+
+def test_item_map_applies_to_list_items():
+    xml = "<Items><Item><OldName>Alice</OldName></Item><Item><OldName>Bob</OldName></Item></Items>"
+    config = {
+        "response_path": "Items.Item",
+        "force_list_paths": ["Item"],
+        "item_map": {"rename": {"OldName": "name"}},
+    }
+    result = transform(xml, config)
+    assert isinstance(result, list)
+    assert result[0]["name"] == "Alice"
+    assert result[1]["name"] == "Bob"
