@@ -100,6 +100,8 @@ async def execute_connector(
                 auth_config=auth_config,
                 headers=connector.headers or {},
             )
+            # Pass raw XML string to transformer so it can parse it properly
+            transform_input = raw
             result_data = raw if isinstance(raw, dict) else {"result": raw}
 
         elif connector.type == "rest":
@@ -118,12 +120,13 @@ async def execute_connector(
             http_status = resp.get("status_code")
             body_data = resp.get("body", {})
             result_data = body_data if isinstance(body_data, dict) else {"body": body_data}
+            transform_input = result_data
 
         else:
             raise UnsupportedConnectorTypeError(f"Unknown connector type: {connector.type}")
 
         if effective_transform:
-            result_data = transformer.transform(result_data, effective_transform)
+            result_data = transformer.transform(transform_input, effective_transform)
 
     except (ConnectorNotFoundError, UnsupportedConnectorTypeError):
         raise
