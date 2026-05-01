@@ -177,9 +177,12 @@ function TransformTab({ connectorId, initialConfig }: { connectorId: string; ini
     <div className="flex flex-col gap-5">
       <Card>
         <h3 className="text-sm font-medium text-gray-700 mb-2">XML source</h3>
+        <p className="text-xs text-gray-400 mb-2">
+          Collez la réponse XML/SOAP brute du connecteur pour tester votre config de transformation.
+        </p>
         <textarea
           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs font-mono h-40 resize-y focus:outline-none focus:ring-2 focus:ring-brand-500"
-          placeholder="<root><item>...</item></root>"
+          placeholder={'<soap:Envelope xmlns:soap="...">\n  <soap:Body>\n    <GetResultResponse>\n      <Result>42</Result>\n    </GetResultResponse>\n  </soap:Body>\n</soap:Envelope>'}
           value={rawXml}
           onChange={(e) => setRawXml(e.target.value)}
         />
@@ -195,6 +198,10 @@ function TransformTab({ connectorId, initialConfig }: { connectorId: string; ini
         {configError && <p className="text-xs text-red-600 mt-1">{configError}</p>}
       </Card>
 
+      {configError && (
+        <p className="text-sm text-red-600">{configError}</p>
+      )}
+
       <div className="flex gap-2">
         <Button onClick={() => save.mutate()} loading={save.isPending} variant="secondary" className="flex items-center gap-1.5">
           <Save className="h-3.5 w-3.5" />
@@ -204,8 +211,14 @@ function TransformTab({ connectorId, initialConfig }: { connectorId: string; ini
           Prévisualiser
         </Button>
       </div>
-      {save.isError && (
-        <p className="text-sm text-red-600">{configError ?? 'Erreur lors de la sauvegarde'}</p>
+
+      {save.isError && !configError && (
+        <p className="text-sm text-red-600">Erreur lors de la sauvegarde</p>
+      )}
+      {preview.isError && !configError && (
+        <p className="text-sm text-red-600">
+          {(preview.error as any)?.response?.data?.detail ?? 'XML invalide ou erreur de transformation'}
+        </p>
       )}
 
       {preview.data && (
