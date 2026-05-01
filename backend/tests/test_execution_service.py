@@ -77,6 +77,43 @@ async def test_execute_soap_connector(client: AsyncClient):
     assert data["duration_ms"] is not None
 
 
+# ── 1b. transform_config applied on SOAP execute ──────────────────────────────
+
+async def test_execute_soap_transform_config_applied(client: AsyncClient):
+    """Regression: transform_config must rename keys in the SOAP response."""
+    token = await _register_login(client)
+
+    r = await client.post(
+        "/api/v1/connectors",
+        json={
+            "name": "SOAP Transform",
+            "type": "soap",
+            "wsdl_url": "https://example.com/service?wsdl",
+            "transform_config": {"rename": {"AddResult": "sum"}},
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 201
+    cid = r.json()["id"]
+
+    with patch(
+        "app.services.execution_service.soap_engine.execute",
+        new_callable=AsyncMock,
+        return_value={"AddResult": 8},
+    ):
+        r = await client.post(
+            f"/api/v1/connectors/{cid}/execute",
+            json={"params": {"operation": "Add", "intA": 5, "intB": 3}},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert r.status_code == 200
+    data = r.json()
+    assert data["status"] == "success"
+    assert data["result"] == {"sum": 8}, "transform_config rename must be applied"
+    assert "AddResult" not in data["result"]
+
+
 # ── 2. Execute REST connector ──────────────────────────────────────────────────
 
 async def test_execute_rest_connector(client: AsyncClient):

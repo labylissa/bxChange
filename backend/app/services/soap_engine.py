@@ -10,7 +10,13 @@ from requests.auth import HTTPBasicAuth
 from zeep import Client, Settings as ZeepSettings
 from zeep.exceptions import Fault
 from zeep.helpers import serialize_object
+from zeep.plugins import HistoryPlugin
 from zeep.transports import Transport
+
+try:
+    from lxml import etree as _lxml_etree
+except ImportError:
+    _lxml_etree = None
 
 
 # ── Custom exceptions ──────────────────────────────────────────────────────────
@@ -60,7 +66,7 @@ def _build_session(auth_type: str, auth_config: dict, extra_headers: dict) -> Se
     return session
 
 
-def _load_client(wsdl_url: str, session: Session, timeout: int) -> Client:
+def _load_client(wsdl_url: str, session: Session, timeout: int, plugins: list | None = None) -> Client:
     transport = Transport(
         session=session,
         timeout=timeout,
@@ -68,7 +74,7 @@ def _load_client(wsdl_url: str, session: Session, timeout: int) -> Client:
     )
     zeep_settings = ZeepSettings(strict=False, xml_huge_tree=True)
     try:
-        return Client(wsdl=wsdl_url, transport=transport, settings=zeep_settings)
+        return Client(wsdl=wsdl_url, transport=transport, settings=zeep_settings, plugins=plugins or [])
     except req_exc.ConnectionError as exc:
         raise SOAPConnectionError(f"Cannot connect to WSDL host: {exc}") from exc
     except req_exc.Timeout as exc:
@@ -134,9 +140,10 @@ def _execute_sync(
     auth_config: dict,
     extra_headers: dict,
     timeout: int,
-) -> dict:
+) -> str | dict:
     session = _build_session(auth_type, auth_config, extra_headers)
-    client = _load_client(wsdl_url, session, timeout)
+    history = HistoryPlugin()
+    client = _load_client(wsdl_url, session, timeout, plugins=[history])
 
     try:
         service_method = getattr(client.service, operation)
@@ -158,6 +165,17 @@ def _execute_sync(
         raise SOAPTimeoutError(f"Request timed out after {timeout}s") from exc
     except req_exc.ConnectionError as exc:
         raise SOAPConnectionError(f"Connection failed: {exc}") from exc
+
+    # Return raw XML so the transformer uses the same XML tag names as /preview-transform.
+    # Without this, zeep's serialize_object produces different key names (e.g. "result"
+    # instead of "AddResult"), causing transform_config rules to silently have no effect.
+    if _lxml_etree is not None:
+        try:
+            envelope = history.last_received.get("envelope") if history.last_received else None
+            if envelope is not None:
+                return _lxml_etree.tostring(envelope, encoding="unicode")
+        except Exception:
+            pass
 
     return _serialize_result(raw)
 
@@ -190,6 +208,11 @@ async def execute(
         headers or {},
         timeout,
     )
+    # When HistoryPlugin captured raw XML, run it through the full transformer pipeline
+    # (parse → unwrap envelope → clean namespaces → apply config) so that key names
+    # match exactly what /preview-transform produces from the same XML.
+    if isinstance(result, str):
+        return _transformer.transform(result, transform_config)
     if transform_config is not None:
-        result = _transformer.transform(result, transform_config)
+        return _transformer.transform(result, transform_config)
     return result

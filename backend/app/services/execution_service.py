@@ -100,7 +100,6 @@ async def execute_connector(
                 auth_config=auth_config,
                 headers=connector.headers or {},
             )
-            # Pass raw XML string to transformer so it can parse it properly
             transform_input = raw
             result_data = raw if isinstance(raw, dict) else {"result": raw}
 
