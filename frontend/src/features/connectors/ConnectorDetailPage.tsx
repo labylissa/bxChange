@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Pencil, Trash2, Plus, Minus } from 'lucide-react'
+import { ArrowLeft, Pencil, Trash2, Plus, Minus, Save } from 'lucide-react'
 import { connectorsApi } from '@/lib/api/connectors'
 import type { Execution } from '@/lib/api/executions'
 import { executionsApi } from '@/lib/api/executions'
@@ -130,11 +130,34 @@ function TestTab({ connectorId, connectorType }: { connectorId: string; connecto
 }
 
 // ── Transform tab ───────────────────────────────────────────────────────────
-function TransformTab({ connectorId }: { connectorId: string }) {
+function TransformTab({ connectorId, initialConfig }: { connectorId: string; initialConfig: Record<string, unknown> | null }) {
+  const qc = useQueryClient()
   const [rawXml, setRawXml] = useState('')
-  const [transformConfig, setTransformConfig] = useState('{}')
+  const [transformConfig, setTransformConfig] = useState(
+    initialConfig ? JSON.stringify(initialConfig, null, 2) : '{}'
+  )
   const [configError, setConfigError] = useState<string | null>(null)
   const [expandedStep, setExpandedStep] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+
+  const save = useMutation({
+    mutationFn: () => {
+      let cfg: Record<string, unknown>
+      try {
+        cfg = JSON.parse(transformConfig)
+        setConfigError(null)
+      } catch {
+        setConfigError('JSON invalide')
+        throw new Error('JSON invalide')
+      }
+      return connectorsApi.updateConnector(connectorId, { transform_config: cfg })
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['connector', connectorId] })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    },
+  })
 
   const preview = useMutation({
     mutationFn: () => {
@@ -172,9 +195,18 @@ function TransformTab({ connectorId }: { connectorId: string }) {
         {configError && <p className="text-xs text-red-600 mt-1">{configError}</p>}
       </Card>
 
-      <Button onClick={() => preview.mutate()} loading={preview.isPending} className="self-start" disabled={!rawXml}>
-        Prévisualiser
-      </Button>
+      <div className="flex gap-2">
+        <Button onClick={() => save.mutate()} loading={save.isPending} variant="secondary" className="flex items-center gap-1.5">
+          <Save className="h-3.5 w-3.5" />
+          {saved ? 'Sauvegardé ✓' : 'Sauvegarder'}
+        </Button>
+        <Button onClick={() => preview.mutate()} loading={preview.isPending} disabled={!rawXml}>
+          Prévisualiser
+        </Button>
+      </div>
+      {save.isError && (
+        <p className="text-sm text-red-600">{configError ?? 'Erreur lors de la sauvegarde'}</p>
+      )}
 
       {preview.data && (
         <div className="flex flex-col gap-3">
@@ -374,7 +406,7 @@ export function ConnectorDetailPage() {
       <div className="mt-1">
         <div className={activeTab !== 'overview' ? 'hidden' : ''}><OverviewTab connector={connector} /></div>
         <div className={activeTab !== 'test' ? 'hidden' : ''}><TestTab connectorId={connector.id} connectorType={connector.type} /></div>
-        <div className={activeTab !== 'transform' ? 'hidden' : ''}><TransformTab connectorId={connector.id} /></div>
+        <div className={activeTab !== 'transform' ? 'hidden' : ''}><TransformTab connectorId={connector.id} initialConfig={connector.transform_config} /></div>
         <div className={activeTab !== 'history' ? 'hidden' : ''}><HistoryTab connectorId={connector.id} /></div>
       </div>
     </div>

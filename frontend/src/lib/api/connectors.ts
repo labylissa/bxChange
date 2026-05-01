@@ -16,6 +16,7 @@ export interface Connector {
   wsdl_file_path: string | null
   auth_type: AuthType
   status: ConnectorStatus
+  transform_config: Record<string, unknown> | null
   created_at: string
 }
 
