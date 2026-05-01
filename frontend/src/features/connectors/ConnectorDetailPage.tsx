@@ -372,10 +372,10 @@ export function ConnectorDetailPage() {
       <Tabs tabs={TABS} active={activeTab} onChange={setActiveTab} />
 
       <div className="mt-1">
-        {activeTab === 'overview' && <OverviewTab connector={connector} />}
-        {activeTab === 'test' && <TestTab connectorId={connector.id} connectorType={connector.type} />}
-        {activeTab === 'transform' && <TransformTab connectorId={connector.id} />}
-        {activeTab === 'history' && <HistoryTab connectorId={connector.id} />}
+        <div className={activeTab !== 'overview' ? 'hidden' : ''}><OverviewTab connector={connector} /></div>
+        <div className={activeTab !== 'test' ? 'hidden' : ''}><TestTab connectorId={connector.id} connectorType={connector.type} /></div>
+        <div className={activeTab !== 'transform' ? 'hidden' : ''}><TransformTab connectorId={connector.id} /></div>
+        <div className={activeTab !== 'history' ? 'hidden' : ''}><HistoryTab connectorId={connector.id} /></div>
       </div>
     </div>
   )
