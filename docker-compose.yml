@@ -44,6 +44,35 @@ services:
       retries: 5
     restart: unless-stopped
 
+  celery-worker:
+    build: ./backend
+    command: celery -A app.workers.celery_app worker --loglevel=info
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - ./uploads:/app/uploads
+    restart: unless-stopped
+
+  celery-beat:
+    build: ./backend
+    command: celery -A app.workers.celery_app beat --loglevel=info
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    restart: unless-stopped
+
   nginx:
     image: nginx:alpine
     ports:

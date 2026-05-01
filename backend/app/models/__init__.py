@@ -7,8 +7,9 @@ from app.models.subscription import Subscription
 from app.models.sso_config import SSOConfig
 from app.models.scim_token import ScimToken
 from app.models.sso_domain_hint import SSODomainHint
+from app.models.scheduled_job import ScheduledJob
 
 __all__ = [
     "Tenant", "User", "Connector", "Execution", "ApiKey", "Subscription",
-    "SSOConfig", "ScimToken", "SSODomainHint",
+    "SSOConfig", "ScimToken", "SSODomainHint", "ScheduledJob",
 ]

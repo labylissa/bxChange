@@ -17,6 +17,7 @@ import { AdminPage } from '@/features/admin/AdminPage'
 import { TenantsPage } from '@/features/admin/TenantsPage'
 import { TenantDetailPage } from '@/features/admin/TenantDetailPage'
 import { SSOConfigPage } from '@/features/sso/SSOConfigPage'
+import { ScheduledJobsPage } from '@/features/scheduled-jobs/ScheduledJobsPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -42,6 +43,7 @@ export default function App() {
               <Route path="/dashboard/logs" element={<LogsPage />} />
               <Route path="/dashboard/api-keys" element={<APIKeysPage />} />
               <Route path="/dashboard/api-docs" element={<APIDocsPage />} />
+              <Route path="/dashboard/scheduled-jobs" element={<ScheduledJobsPage />} />
               <Route path="/dashboard/settings" element={<SettingsPage />} />
 
               {/* Admin only: team management + SSO */}

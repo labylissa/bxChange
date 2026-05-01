@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from sqlalchemy import select, text
 
-from app.api.v1 import admin, api_keys, auth, connectors, executions, logs, scim, sso, team
+from app.api.v1 import admin, api_keys, auth, connectors, executions, logs, scim, scheduled_jobs, sso, team
 from app.core.config import settings
 from app.core.redis import _get_pool
 from app.core.security import hash_password
@@ -26,6 +26,7 @@ _TAGS_METADATA = [
     {"name": "health", "description": "Statut de la plateforme"},
     {"name": "sso", "description": "SSO Enterprise — config SAML/OIDC, ACS, tokens SCIM"},
     {"name": "scim", "description": "SCIM 2.0 — provisioning automatique via Azure AD / Okta"},
+    {"name": "scheduled-jobs", "description": "Exécutions automatiques planifiées (cron ou interval)"},
 ]
 
 _DESCRIPTION = """
@@ -131,6 +132,7 @@ app.include_router(admin.router, prefix="/api/v1")
 app.include_router(team.router, prefix="/api/v1")
 app.include_router(sso.router, prefix="/api/v1")
 app.include_router(scim.router, prefix="/api/v1")
+app.include_router(scheduled_jobs.router, prefix="/api/v1")
 
 
 @app.on_event("startup")
