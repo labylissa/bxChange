@@ -8,6 +8,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.redis import _get_pool as _redis_pool
 from app.models.connector import Connector
 from app.models.execution import Execution
 from app.schemas.execution import ExecutionRead
@@ -99,6 +100,7 @@ async def execute_connector(
                 auth_type=connector.auth_type,
                 auth_config=auth_config,
                 headers=connector.headers or {},
+                advanced_config=connector.advanced_config,
             )
             transform_input = raw
             result_data = raw if isinstance(raw, dict) else {"result": raw}
@@ -106,6 +108,10 @@ async def execute_connector(
         elif connector.type == "rest":
             method = call_params.pop("method", "GET")
             path = call_params.pop("path", "")
+            try:
+                redis = _redis_pool()
+            except Exception:
+                redis = None
             resp = await rest_engine.execute(
                 base_url=connector.base_url,
                 method=method,
@@ -115,6 +121,9 @@ async def execute_connector(
                 headers=connector.headers or {},
                 auth_type=connector.auth_type,
                 auth_config=auth_config,
+                advanced_config=connector.advanced_config,
+                connector_id=str(connector_id),
+                redis_client=redis,
             )
             http_status = resp.get("status_code")
             body_data = resp.get("body", {})

@@ -1,8 +1,48 @@
 import uuid
 from datetime import datetime
 from enum import Enum
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+# ── Advanced config sub-schemas ────────────────────────────────────────────────
+
+class WSSecurityConfig(BaseModel):
+    type: Literal["username_token", "certificate"]
+    username: str | None = None
+    password: str | None = None
+    timestamp: bool = True
+    nonce: bool = True
+
+
+class SOAPAdvancedConfig(BaseModel):
+    service_name: str | None = None
+    port_name: str | None = None
+    operation_timeout: int = 30
+    custom_headers: dict[str, str] = Field(default_factory=dict)
+    ws_security: WSSecurityConfig | None = None
+    response_path: str | None = None
+    force_list_paths: list[str] = Field(default_factory=list)
+
+
+class OAuth2CCConfig(BaseModel):
+    token_url: str
+    client_id: str
+    client_secret: str
+    scope: str | None = None
+    token_cache_ttl: int = 3600
+
+
+class RESTAdvancedConfig(BaseModel):
+    headers: dict[str, str] = Field(default_factory=dict)
+    query_params: dict[str, str] = Field(default_factory=dict)
+    retry_count: int = 3
+    retry_backoff: float = 1.0
+    retry_on_codes: list[int] = Field(default_factory=lambda: [429, 502, 503, 504])
+    response_path: str | None = None
+    body_template: str | None = None
+    oauth2_client_credentials: OAuth2CCConfig | None = None
 
 
 class ConnectorType(str, Enum):
@@ -54,6 +94,7 @@ class ConnectorCreate(BaseModel):
     auth_config: dict | None = None
     headers: dict | None = None
     transform_config: dict | None = None
+    advanced_config: dict | None = None
 
     @model_validator(mode="after")
     def validate_type_fields(self) -> "ConnectorCreate":
@@ -78,6 +119,9 @@ class ConnectorRead(BaseModel):
     wsdl_file_path: str | None
     auth_type: str
     status: str
+    headers: dict | None = None
+    transform_config: dict | None = None
+    advanced_config: dict | None = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -91,6 +135,7 @@ class ConnectorUpdate(BaseModel):
     auth_config: dict | None = None
     headers: dict | None = None
     transform_config: dict | None = None
+    advanced_config: dict | None = None
     status: ConnectorStatus | None = None
 
 

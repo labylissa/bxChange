@@ -26,6 +26,7 @@ class Connector(Base):
     auth_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     headers: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     transform_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    advanced_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(
         Enum("active", "error", "disabled", "draft", name="connector_status"),
         default="draft",

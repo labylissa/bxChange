@@ -218,6 +218,7 @@ async def create_connector(
         auth_config=encrypted_auth,
         headers=payload.headers,
         transform_config=payload.transform_config,
+        advanced_config=payload.advanced_config,
         created_by=current_user.id,
     )
     db.add(connector)
@@ -289,6 +290,8 @@ async def update_connector(
         connector.headers = payload.headers
     if payload.transform_config is not None:
         connector.transform_config = payload.transform_config
+    if payload.advanced_config is not None:
+        connector.advanced_config = payload.advanced_config
     if payload.status is not None:
         connector.status = payload.status.value
 

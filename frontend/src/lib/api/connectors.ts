@@ -5,6 +5,42 @@ export type AuthType = 'none' | 'basic' | 'bearer' | 'apikey' | 'oauth2'
 export type ConnectorStatus = 'active' | 'error' | 'disabled' | 'draft'
 export type WsdlSource = 'url' | 'upload'
 
+export interface WSSecurityConfig {
+  type: 'username_token'
+  username: string
+  password?: string
+  timestamp?: boolean
+}
+
+export interface SOAPAdvancedConfig {
+  service_name?: string
+  port_name?: string
+  operation_timeout?: number
+  custom_headers?: Record<string, string>
+  ws_security?: WSSecurityConfig
+  response_path?: string
+  force_list_paths?: string[]
+}
+
+export interface OAuth2CCConfig {
+  token_url: string
+  client_id: string
+  client_secret?: string
+  scope?: string
+  token_cache_ttl?: number
+}
+
+export interface RESTAdvancedConfig {
+  headers?: Record<string, string>
+  query_params?: Record<string, string>
+  retry_count?: number
+  retry_backoff?: number
+  retry_on_codes?: number[]
+  response_path?: string
+  body_template?: string
+  oauth2_client_credentials?: OAuth2CCConfig
+}
+
 export interface Connector {
   id: string
   tenant_id: string
@@ -17,6 +53,8 @@ export interface Connector {
   auth_type: AuthType
   status: ConnectorStatus
   transform_config: Record<string, unknown> | null
+  headers: Record<string, string> | null
+  advanced_config: SOAPAdvancedConfig | RESTAdvancedConfig | null
   created_at: string
 }
 
@@ -31,6 +69,7 @@ export interface ConnectorCreate {
   auth_config?: Record<string, unknown>
   headers?: Record<string, string>
   transform_config?: Record<string, unknown>
+  advanced_config?: SOAPAdvancedConfig | RESTAdvancedConfig | null
 }
 
 export interface ConnectorUpdate {
@@ -41,6 +80,7 @@ export interface ConnectorUpdate {
   auth_config?: Record<string, unknown>
   headers?: Record<string, string>
   transform_config?: Record<string, unknown>
+  advanced_config?: SOAPAdvancedConfig | RESTAdvancedConfig | null
   status?: ConnectorStatus
 }
 

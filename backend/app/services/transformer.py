@@ -14,11 +14,14 @@ class XMLParseError(Exception):
 
 # ── A) Parse ───────────────────────────────────────────────────────────────────
 
-def _parse(raw: str | dict) -> dict:
+def _parse(raw: str | dict, force_list_paths: list[str] | None = None) -> dict:
     if isinstance(raw, dict):
         return raw
     try:
-        result = xmltodict.parse(raw)
+        kwargs: dict = {}
+        if force_list_paths:
+            kwargs["force_list"] = force_list_paths
+        result = xmltodict.parse(raw, **kwargs)
         return result if isinstance(result, dict) else {"result": result}
     except Exception as exc:
         raise XMLParseError(f"Invalid XML: {exc}") from exc
@@ -191,8 +194,9 @@ def transform_with_steps(
 ) -> dict:
     """Run the full pipeline and return each intermediate step."""
     config = transform_config or {}
+    force_list_paths: list[str] = config.get("force_list_paths", [])
 
-    data = _parse(raw)
+    data = _parse(raw, force_list_paths or None)
 
     after_unwrap = unwrap_soap(data)
     after_clean = clean_namespaces(after_unwrap)

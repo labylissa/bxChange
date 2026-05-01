@@ -185,3 +185,47 @@ def test_steps_all_keys_present():
     xml = "<Root><X>1</X></Root>"
     steps = transform_with_steps(xml)
     assert set(steps.keys()) == {"after_unwrap", "after_clean", "after_normalize", "after_mapping", "final"}
+
+
+# ── Sprint 16 — Advanced config features ──────────────────────────────────────
+
+def test_force_list_paths_single_element():
+    xml = "<Items><Item>one</Item></Items>"
+    result = transform(xml, {"force_list_paths": ["Item"]})
+    items = result["Items"]["Item"]
+    assert isinstance(items, list)
+    assert items == ["one"]
+
+
+def test_force_list_paths_multiple_elements_unchanged():
+    xml = "<Items><Item>a</Item><Item>b</Item></Items>"
+    result = transform(xml, {"force_list_paths": ["Item"]})
+    items = result["Items"]["Item"]
+    assert isinstance(items, list)
+    assert len(items) == 2
+
+
+def test_force_list_paths_not_applied_without_config():
+    xml = "<Items><Item>one</Item></Items>"
+    result = transform(xml)
+    assert isinstance(result["Items"]["Item"], str)
+
+
+def test_namespace_cleanup_removes_xmlns_attrs():
+    xml = (
+        '<Root xmlns:ns="http://example.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
+        '<ns:Value xsi:type="string">hello</ns:Value>'
+        '</Root>'
+    )
+    result = transform(xml)
+    # Top-level is Root; namespace attrs should be stripped from its children
+    root = result.get("Root", result)
+    for key in root:
+        assert not key.startswith("@xmlns")
+    assert "Value" in root
+
+
+def test_namespace_cleanup_strips_prefix():
+    xml = '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><Data>42</Data></soap:Body></soap:Envelope>'
+    result = transform(xml)
+    assert result == {"Data": 42}

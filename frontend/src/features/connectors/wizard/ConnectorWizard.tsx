@@ -1,22 +1,18 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { X, Wifi, Globe, ChevronRight, ChevronLeft, Plus, Trash2, Link, FolderOpen, Upload } from 'lucide-react'
-import type { ConnectorType, AuthType } from '@/lib/api/connectors'
+import { X, Wifi, Globe, ChevronRight, ChevronLeft, Link, FolderOpen, Upload } from 'lucide-react'
+import type { ConnectorType, AuthType, SOAPAdvancedConfig, RESTAdvancedConfig } from '@/lib/api/connectors'
 import { connectorsApi } from '@/lib/api/connectors'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { JsonViewer } from '@/components/ui/JsonViewer'
+import { KeyValueEditor, type KVPair } from '@/components/ui/KeyValueEditor'
 
 interface Props {
   onClose: () => void
 }
 
-type Step = 1 | 2 | 3 | 4
-
-interface HeaderPair {
-  key: string
-  value: string
-}
+type Step = 1 | 2 | 3 | 4 | 5
 
 interface WizardState {
   // Step 1
@@ -35,7 +31,7 @@ interface WizardState {
   baseUrl: string
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
   restPath: string
-  customHeaders: HeaderPair[]
+  customHeaders: KVPair[]
   // Step 3
   authType: AuthType
   username: string
@@ -44,6 +40,30 @@ interface WizardState {
   apiKeyName: string
   apiKeyValue: string
   apiKeyIn: 'header' | 'query'
+  // Step 4 – SOAP advanced
+  soapAdvServiceName: string
+  soapAdvPortName: string
+  soapAdvOperationTimeout: string
+  soapAdvCustomHeaders: KVPair[]
+  soapAdvWsSecEnabled: boolean
+  soapAdvWsSecUsername: string
+  soapAdvWsSecPassword: string
+  soapAdvResponsePath: string
+  soapAdvForceListPaths: string
+  // Step 4 – REST advanced
+  restAdvStaticHeaders: KVPair[]
+  restAdvQueryParams: KVPair[]
+  restAdvRetryCount: string
+  restAdvRetryBackoff: string
+  restAdvRetryOnCodes: string
+  restAdvResponsePath: string
+  restAdvBodyTemplate: string
+  restAdvOauth2Enabled: boolean
+  restAdvOauth2TokenUrl: string
+  restAdvOauth2ClientId: string
+  restAdvOauth2ClientSecret: string
+  restAdvOauth2Scope: string
+  restAdvOauth2CacheTtl: string
   // Internal
   draftConnectorId: string | null
   testResponse: unknown
@@ -58,11 +78,25 @@ const INITIAL: WizardState = {
   baseUrl: '', method: 'GET', restPath: '', customHeaders: [{ key: '', value: '' }],
   authType: 'none', username: '', password: '',
   bearerToken: '', apiKeyName: 'X-API-Key', apiKeyValue: '', apiKeyIn: 'header',
+  soapAdvServiceName: '', soapAdvPortName: '', soapAdvOperationTimeout: '30',
+  soapAdvCustomHeaders: [], soapAdvWsSecEnabled: false,
+  soapAdvWsSecUsername: '', soapAdvWsSecPassword: '',
+  soapAdvResponsePath: '', soapAdvForceListPaths: '',
+  restAdvStaticHeaders: [], restAdvQueryParams: [],
+  restAdvRetryCount: '3', restAdvRetryBackoff: '1.0', restAdvRetryOnCodes: '',
+  restAdvResponsePath: '', restAdvBodyTemplate: '',
+  restAdvOauth2Enabled: false, restAdvOauth2TokenUrl: '',
+  restAdvOauth2ClientId: '', restAdvOauth2ClientSecret: '',
+  restAdvOauth2Scope: '', restAdvOauth2CacheTtl: '3600',
   draftConnectorId: null, testResponse: null, testError: null,
 }
 
 function stepLabel(s: Step) {
-  return ['Type & Nom', 'Connexion', 'Authentification', 'Test & Confirmation'][s - 1]
+  return ['Type & Nom', 'Connexion', 'Authentification', 'Config. avancée', 'Test & Confirmation'][s - 1]
+}
+
+function buildKVMap(pairs: KVPair[]): Record<string, string> {
+  return Object.fromEntries(pairs.filter((h) => h.key.trim()).map((h) => [h.key.trim(), h.value]))
 }
 
 function buildAuthConfig(s: WizardState): Record<string, unknown> | undefined {
@@ -72,8 +106,57 @@ function buildAuthConfig(s: WizardState): Record<string, unknown> | undefined {
   return undefined
 }
 
-function buildHeaders(pairs: HeaderPair[]): Record<string, string> {
-  return Object.fromEntries(pairs.filter((h) => h.key.trim()).map((h) => [h.key.trim(), h.value]))
+function buildAdvancedConfig(s: WizardState): SOAPAdvancedConfig | RESTAdvancedConfig | null {
+  if (s.type === 'soap') {
+    const adv: SOAPAdvancedConfig = {}
+    if (s.soapAdvServiceName.trim()) adv.service_name = s.soapAdvServiceName.trim()
+    if (s.soapAdvPortName.trim()) adv.port_name = s.soapAdvPortName.trim()
+    const timeout = parseInt(s.soapAdvOperationTimeout)
+    if (!isNaN(timeout) && timeout !== 30) adv.operation_timeout = timeout
+    const ch = buildKVMap(s.soapAdvCustomHeaders)
+    if (Object.keys(ch).length) adv.custom_headers = ch
+    if (s.soapAdvWsSecEnabled && s.soapAdvWsSecUsername.trim()) {
+      adv.ws_security = {
+        type: 'username_token',
+        username: s.soapAdvWsSecUsername.trim(),
+        ...(s.soapAdvWsSecPassword ? { password: s.soapAdvWsSecPassword } : {}),
+      }
+    }
+    if (s.soapAdvResponsePath.trim()) adv.response_path = s.soapAdvResponsePath.trim()
+    const flp = s.soapAdvForceListPaths.split(',').map((t) => t.trim()).filter(Boolean)
+    if (flp.length) adv.force_list_paths = flp
+    return Object.keys(adv).length ? adv : null
+  }
+
+  if (s.type === 'rest') {
+    const adv: RESTAdvancedConfig = {}
+    const sh = buildKVMap(s.restAdvStaticHeaders)
+    if (Object.keys(sh).length) adv.headers = sh
+    const qp = buildKVMap(s.restAdvQueryParams)
+    if (Object.keys(qp).length) adv.query_params = qp
+    const rc = parseInt(s.restAdvRetryCount)
+    if (!isNaN(rc) && rc !== 3) adv.retry_count = rc
+    const rb = parseFloat(s.restAdvRetryBackoff)
+    if (!isNaN(rb) && rb !== 1.0) adv.retry_backoff = rb
+    if (s.restAdvRetryOnCodes.trim()) {
+      const codes = s.restAdvRetryOnCodes.split(',').map((c) => parseInt(c.trim())).filter((n) => !isNaN(n))
+      if (codes.length) adv.retry_on_codes = codes
+    }
+    if (s.restAdvResponsePath.trim()) adv.response_path = s.restAdvResponsePath.trim()
+    if (s.restAdvBodyTemplate.trim()) adv.body_template = s.restAdvBodyTemplate.trim()
+    if (s.restAdvOauth2Enabled && s.restAdvOauth2TokenUrl.trim() && s.restAdvOauth2ClientId.trim()) {
+      adv.oauth2_client_credentials = {
+        token_url: s.restAdvOauth2TokenUrl.trim(),
+        client_id: s.restAdvOauth2ClientId.trim(),
+        ...(s.restAdvOauth2ClientSecret ? { client_secret: s.restAdvOauth2ClientSecret } : {}),
+        ...(s.restAdvOauth2Scope.trim() ? { scope: s.restAdvOauth2Scope.trim() } : {}),
+        ...(s.restAdvOauth2CacheTtl !== '3600' ? { token_cache_ttl: parseInt(s.restAdvOauth2CacheTtl) || 3600 } : {}),
+      }
+    }
+    return Object.keys(adv).length ? adv : null
+  }
+
+  return null
 }
 
 export function ConnectorWizard({ onClose }: Props) {
@@ -151,22 +234,25 @@ export function ConnectorWizard({ onClose }: Props) {
     },
   })
 
-  // Step 4: REST create + test
+  // Step 5: REST create + test
   const testRest = useMutation({
     mutationFn: async () => {
+      const adv = buildAdvancedConfig(s)
       let connId = s.draftConnectorId
       if (!connId) {
         const conn = await connectorsApi.createConnector({
           name: s.name, type: 'rest', base_url: s.baseUrl,
           auth_type: s.authType, auth_config: buildAuthConfig(s),
-          headers: buildHeaders(s.customHeaders),
+          headers: buildKVMap(s.customHeaders),
+          advanced_config: adv,
         })
         connId = conn.id
         patch({ draftConnectorId: conn.id })
       } else {
         await connectorsApi.updateConnector(connId, {
           base_url: s.baseUrl, auth_type: s.authType,
-          auth_config: buildAuthConfig(s), headers: buildHeaders(s.customHeaders),
+          auth_config: buildAuthConfig(s), headers: buildKVMap(s.customHeaders),
+          advanced_config: adv,
         })
       }
       return connectorsApi.testRest(connId, { method: s.method, path: s.restPath })
@@ -175,12 +261,13 @@ export function ConnectorWizard({ onClose }: Props) {
     onError: (err: Error) => patch({ testError: err.message, testResponse: null }),
   })
 
-  // Step 4: SOAP test (update auth then re-test-wsdl)
+  // Step 5: SOAP test (update auth + advanced then re-test-wsdl)
   const testSoap = useMutation({
     mutationFn: async () => {
       const connId = s.draftConnectorId!
       await connectorsApi.updateConnector(connId, {
         auth_type: s.authType, auth_config: buildAuthConfig(s),
+        advanced_config: buildAdvancedConfig(s),
       })
       return connectorsApi.testWsdl(connId)
     },
@@ -196,8 +283,11 @@ export function ConnectorWizard({ onClose }: Props) {
 
   function handleConfirm() {
     if (s.draftConnectorId) {
-      connectorsApi.updateConnector(s.draftConnectorId, { status: 'active' })
-        .catch(() => {/* best-effort */ })
+      const adv = buildAdvancedConfig(s)
+      connectorsApi.updateConnector(s.draftConnectorId, {
+        status: 'active',
+        ...(adv != null ? { advanced_config: adv } : {}),
+      }).catch(() => {})
     }
     qc.invalidateQueries({ queryKey: ['connectors'] })
     onClose()
@@ -344,9 +434,7 @@ export function ConnectorWizard({ onClose }: Props) {
                     </div>
                   ) : (
                     <div className="text-center">
-                      <p className="text-sm text-gray-600">
-                        Glissez votre fichier .wsdl ici
-                      </p>
+                      <p className="text-sm text-gray-600">Glissez votre fichier .wsdl ici</p>
                       <p className="text-xs text-gray-400 mt-0.5">ou cliquez pour sélectionner</p>
                       <p className="text-xs text-gray-400 mt-1">Formats : .wsdl, .xml — max 5 MB</p>
                     </div>
@@ -424,51 +512,11 @@ export function ConnectorWizard({ onClose }: Props) {
             />
           </div>
         </div>
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-sm font-medium text-gray-700">Headers</label>
-            <button
-              type="button"
-              onClick={() => patch({ customHeaders: [...s.customHeaders, { key: '', value: '' }] })}
-              className="text-xs text-brand-600 hover:underline flex items-center gap-1"
-            >
-              <Plus className="h-3 w-3" /> Ajouter
-            </button>
-          </div>
-          <div className="flex flex-col gap-2">
-            {s.customHeaders.map((h, i) => (
-              <div key={i} className="flex gap-2 items-center">
-                <input
-                  className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  placeholder="Clé"
-                  value={h.key}
-                  onChange={(e) => {
-                    const updated = [...s.customHeaders]
-                    updated[i] = { ...updated[i], key: e.target.value }
-                    patch({ customHeaders: updated })
-                  }}
-                />
-                <input
-                  className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  placeholder="Valeur"
-                  value={h.value}
-                  onChange={(e) => {
-                    const updated = [...s.customHeaders]
-                    updated[i] = { ...updated[i], value: e.target.value }
-                    patch({ customHeaders: updated })
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => patch({ customHeaders: s.customHeaders.filter((_, j) => j !== i) })}
-                  className="text-gray-400 hover:text-red-500"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
+        <KeyValueEditor
+          label="Headers"
+          pairs={s.customHeaders}
+          onChange={(pairs) => patch({ customHeaders: pairs })}
+        />
       </div>
     )
   }
@@ -521,8 +569,218 @@ export function ConnectorWizard({ onClose }: Props) {
     )
   }
 
-  // ── Step 4 ───────────────────────────────────────────────────────────────
+  // ── Step 4 — Advanced config ──────────────────────────────────────────────
   function renderStep4() {
+    if (s.type === 'soap') {
+      return (
+        <div className="flex flex-col gap-5">
+          <p className="text-xs text-gray-500">Tous les champs sont optionnels.</p>
+
+          {/* Service / Port */}
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Service name"
+              placeholder="CalculatorService"
+              value={s.soapAdvServiceName}
+              onChange={(e) => patch({ soapAdvServiceName: e.target.value })}
+            />
+            <Input
+              label="Port name"
+              placeholder="CalculatorSoap"
+              value={s.soapAdvPortName}
+              onChange={(e) => patch({ soapAdvPortName: e.target.value })}
+            />
+          </div>
+
+          {/* Operation timeout */}
+          <Input
+            label="Timeout opération (s)"
+            type="number"
+            placeholder="30"
+            value={s.soapAdvOperationTimeout}
+            onChange={(e) => patch({ soapAdvOperationTimeout: e.target.value })}
+          />
+
+          {/* Custom HTTP headers */}
+          <KeyValueEditor
+            label="Headers HTTP additionnels"
+            pairs={s.soapAdvCustomHeaders}
+            onChange={(pairs) => patch({ soapAdvCustomHeaders: pairs })}
+          />
+
+          {/* Response path */}
+          <Input
+            label="Response path (ex: Body.Result)"
+            placeholder="Body.Result"
+            value={s.soapAdvResponsePath}
+            onChange={(e) => patch({ soapAdvResponsePath: e.target.value })}
+          />
+
+          {/* Force list paths */}
+          <Input
+            label="Force list paths (séparés par virgule)"
+            placeholder="Item,Row,Record"
+            value={s.soapAdvForceListPaths}
+            onChange={(e) => patch({ soapAdvForceListPaths: e.target.value })}
+          />
+
+          {/* WS-Security */}
+          <div className="border border-gray-200 rounded-xl p-4 flex flex-col gap-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                checked={s.soapAdvWsSecEnabled}
+                onChange={(e) => patch({ soapAdvWsSecEnabled: e.target.checked })}
+              />
+              <span className="text-sm font-medium text-gray-700">WS-Security (UsernameToken)</span>
+            </label>
+            {s.soapAdvWsSecEnabled && (
+              <div className="flex flex-col gap-3 pt-1">
+                <Input
+                  label="Utilisateur WS-Sec"
+                  value={s.soapAdvWsSecUsername}
+                  onChange={(e) => patch({ soapAdvWsSecUsername: e.target.value })}
+                />
+                <Input
+                  label="Mot de passe WS-Sec"
+                  type="password"
+                  value={s.soapAdvWsSecPassword}
+                  onChange={(e) => patch({ soapAdvWsSecPassword: e.target.value })}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )
+    }
+
+    // REST advanced
+    return (
+      <div className="flex flex-col gap-5">
+        <p className="text-xs text-gray-500">Tous les champs sont optionnels.</p>
+
+        {/* Static headers */}
+        <KeyValueEditor
+          label="Headers statiques"
+          pairs={s.restAdvStaticHeaders}
+          onChange={(pairs) => patch({ restAdvStaticHeaders: pairs })}
+        />
+
+        {/* Static query params */}
+        <KeyValueEditor
+          label="Query params statiques"
+          pairs={s.restAdvQueryParams}
+          onChange={(pairs) => patch({ restAdvQueryParams: pairs })}
+          keyPlaceholder="Paramètre"
+        />
+
+        {/* Retry policy */}
+        <div className="border border-gray-200 rounded-xl p-4 flex flex-col gap-3">
+          <p className="text-sm font-medium text-gray-700">Politique de retry</p>
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Tentatives max"
+              type="number"
+              placeholder="3"
+              value={s.restAdvRetryCount}
+              onChange={(e) => patch({ restAdvRetryCount: e.target.value })}
+            />
+            <Input
+              label="Backoff base (s)"
+              type="number"
+              placeholder="1.0"
+              value={s.restAdvRetryBackoff}
+              onChange={(e) => patch({ restAdvRetryBackoff: e.target.value })}
+            />
+          </div>
+          <Input
+            label="Codes retriables (ex: 502,503,504)"
+            placeholder="502,503,504"
+            value={s.restAdvRetryOnCodes}
+            onChange={(e) => patch({ restAdvRetryOnCodes: e.target.value })}
+          />
+        </div>
+
+        {/* Response path */}
+        <Input
+          label="Response path JSONPath (ex: $.data.items)"
+          placeholder="$.data.items"
+          value={s.restAdvResponsePath}
+          onChange={(e) => patch({ restAdvResponsePath: e.target.value })}
+        />
+
+        {/* Body template */}
+        <div>
+          <label className="text-sm font-medium text-gray-700">Body template</label>
+          <textarea
+            className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500 resize-y"
+            rows={3}
+            placeholder={'{"name": "{name}", "qty": {qty}}'}
+            value={s.restAdvBodyTemplate}
+            onChange={(e) => patch({ restAdvBodyTemplate: e.target.value })}
+          />
+          <p className="text-xs text-gray-400 mt-1">
+            Utilisez <code className="bg-gray-100 px-1 rounded">{'{variable}'}</code> — valeurs injectées depuis les params d'exécution.
+          </p>
+        </div>
+
+        {/* OAuth2 CC */}
+        <div className="border border-gray-200 rounded-xl p-4 flex flex-col gap-3">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+              checked={s.restAdvOauth2Enabled}
+              onChange={(e) => patch({ restAdvOauth2Enabled: e.target.checked })}
+            />
+            <span className="text-sm font-medium text-gray-700">OAuth2 Client Credentials</span>
+          </label>
+          {s.restAdvOauth2Enabled && (
+            <div className="flex flex-col gap-3 pt-1">
+              <Input
+                label="Token URL"
+                placeholder="https://auth.example.com/oauth/token"
+                value={s.restAdvOauth2TokenUrl}
+                onChange={(e) => patch({ restAdvOauth2TokenUrl: e.target.value })}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Client ID"
+                  value={s.restAdvOauth2ClientId}
+                  onChange={(e) => patch({ restAdvOauth2ClientId: e.target.value })}
+                />
+                <Input
+                  label="Client Secret"
+                  type="password"
+                  value={s.restAdvOauth2ClientSecret}
+                  onChange={(e) => patch({ restAdvOauth2ClientSecret: e.target.value })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Scope (optionnel)"
+                  placeholder="read:api"
+                  value={s.restAdvOauth2Scope}
+                  onChange={(e) => patch({ restAdvOauth2Scope: e.target.value })}
+                />
+                <Input
+                  label="Cache TTL (s)"
+                  type="number"
+                  placeholder="3600"
+                  value={s.restAdvOauth2CacheTtl}
+                  onChange={(e) => patch({ restAdvOauth2CacheTtl: e.target.value })}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // ── Step 5 — Test & Confirmation ─────────────────────────────────────────
+  function renderStep5() {
     return (
       <div className="flex flex-col gap-4">
         <p className="text-sm text-gray-600">
@@ -565,10 +823,11 @@ export function ConnectorWizard({ onClose }: Props) {
       return s.baseUrl.trim().length > 0
     }
     if (step === 3) return true
+    if (step === 4) return true
     return false
   }
 
-  function next() { if (step < 4) setStep((prev) => (prev + 1) as Step) }
+  function next() { if (step < 5) setStep((prev) => (prev + 1) as Step) }
   function prev() { if (step > 1) setStep((prev) => (prev - 1) as Step) }
 
   return (
@@ -579,7 +838,7 @@ export function ConnectorWizard({ onClose }: Props) {
           <div>
             <h2 className="font-semibold text-gray-900">Nouveau connecteur</h2>
             <p className="text-xs text-gray-500 mt-0.5">
-              Étape {step}/4 — {stepLabel(step)}
+              Étape {step}/5 — {stepLabel(step)}
             </p>
           </div>
           <button onClick={handleClose} className="text-gray-400 hover:text-gray-600">
@@ -589,7 +848,7 @@ export function ConnectorWizard({ onClose }: Props) {
 
         {/* Progress */}
         <div className="flex px-6 pt-4 gap-1.5">
-          {([1, 2, 3, 4] as Step[]).map((n) => (
+          {([1, 2, 3, 4, 5] as Step[]).map((n) => (
             <div
               key={n}
               className={`h-1 flex-1 rounded-full transition-colors ${n <= step ? 'bg-brand-600' : 'bg-gray-200'}`}
@@ -603,6 +862,7 @@ export function ConnectorWizard({ onClose }: Props) {
           {step === 2 && renderStep2()}
           {step === 3 && renderStep3()}
           {step === 4 && renderStep4()}
+          {step === 5 && renderStep5()}
         </div>
 
         {/* Footer */}
@@ -611,7 +871,7 @@ export function ConnectorWizard({ onClose }: Props) {
             {step === 1 ? 'Annuler' : <><ChevronLeft className="h-4 w-4" /> Précédent</>}
           </Button>
 
-          {step < 4 ? (
+          {step < 5 ? (
             <Button onClick={next} disabled={!canAdvance()}>
               Suivant <ChevronRight className="h-4 w-4" />
             </Button>

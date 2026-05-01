@@ -207,3 +207,160 @@ async def test_connection_error_no_retry():
                 await _exec()
 
     assert mock_sleep.await_count == 0  # connection errors are not retried
+
+
+# ── Sprint 16 — Advanced config ────────────────────────────────────────────────
+
+async def test_static_headers_merged():
+    with respx.mock:
+        route = respx.get(BASE + "/data").mock(return_value=httpx.Response(200, json={}))
+        await rest_engine.execute(
+            base_url=BASE, method="GET", path="/data",
+            advanced_config={"headers": {"X-Custom": "abc"}},
+        )
+    assert route.calls[0].request.headers.get("x-custom") == "abc"
+
+
+async def test_static_query_params_merged():
+    with respx.mock:
+        route = respx.get(BASE + "/data").mock(return_value=httpx.Response(200, json={}))
+        await rest_engine.execute(
+            base_url=BASE, method="GET", path="/data",
+            advanced_config={"query_params": {"version": "2"}},
+        )
+    assert "version=2" in str(route.calls[0].request.url)
+
+
+async def test_configurable_retry_count():
+    with patch("asyncio.sleep", new_callable=AsyncMock):
+        with respx.mock:
+            route = respx.get(BASE + "/data").mock(
+                side_effect=[httpx.Response(503)] * 2 + [httpx.Response(200, json={"ok": True})]
+            )
+            result = await rest_engine.execute(
+                base_url=BASE, method="GET", path="/data",
+                advanced_config={"retry_count": 3, "retry_on_codes": [503]},
+            )
+    assert result["status_code"] == 200
+    assert route.call_count == 3
+
+
+async def test_configurable_retry_on_codes():
+    with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        with respx.mock:
+            route = respx.get(BASE + "/data").mock(
+                side_effect=[httpx.Response(429), httpx.Response(200, json={})]
+            )
+            result = await rest_engine.execute(
+                base_url=BASE, method="GET", path="/data",
+                advanced_config={"retry_count": 2, "retry_on_codes": [429]},
+            )
+    assert result["status_code"] == 200
+    assert mock_sleep.await_count == 1
+
+
+async def test_body_template_substitution():
+    with respx.mock:
+        route = respx.post(BASE + "/items").mock(return_value=httpx.Response(201, json={"id": 1}))
+        await rest_engine.execute(
+            base_url=BASE, method="POST", path="/items",
+            params={"name": "widget", "qty": "5"},
+            advanced_config={"body_template": '{"name": "{name}", "quantity": {qty}}'},
+        )
+    sent = route.calls[0].request.content
+    assert b"widget" in sent
+    assert b"5" in sent
+
+
+async def test_body_template_missing_variable_raises_400():
+    with respx.mock:
+        respx.post(BASE + "/items").mock(return_value=httpx.Response(201, json={}))
+        with pytest.raises(RESTResponseError) as exc_info:
+            await rest_engine.execute(
+                base_url=BASE, method="POST", path="/items",
+                params={},
+                advanced_config={"body_template": '{"name": "{name}"}'},
+            )
+    assert exc_info.value.status_code == 400
+
+
+async def test_jsonpath_response_path():
+    with respx.mock:
+        respx.get(BASE + "/data").mock(
+            return_value=httpx.Response(200, json={"data": {"items": [1, 2, 3]}})
+        )
+        result = await rest_engine.execute(
+            base_url=BASE, method="GET", path="/data",
+            advanced_config={"response_path": "$.data.items"},
+        )
+    assert result["body"] == [1, 2, 3]
+
+
+async def test_jsonpath_no_match_returns_original():
+    with respx.mock:
+        respx.get(BASE + "/data").mock(
+            return_value=httpx.Response(200, json={"x": 1})
+        )
+        result = await rest_engine.execute(
+            base_url=BASE, method="GET", path="/data",
+            advanced_config={"response_path": "$.missing.path"},
+        )
+    assert result["body"] == {"x": 1}
+
+
+async def test_oauth2_cc_token_fetched_and_cached():
+    from fakeredis import FakeAsyncRedis
+    fake_redis = FakeAsyncRedis(decode_responses=True)
+
+    with respx.mock:
+        respx.post("https://auth.example.com/token").mock(
+            return_value=httpx.Response(200, json={"access_token": "tok123", "expires_in": 3600})
+        )
+        respx.get(BASE + "/data").mock(return_value=httpx.Response(200, json={"ok": True}))
+
+        result = await rest_engine.execute(
+            base_url=BASE, method="GET", path="/data",
+            advanced_config={
+                "oauth2_client_credentials": {
+                    "token_url": "https://auth.example.com/token",
+                    "client_id": "cid",
+                    "client_secret": "csecret",
+                    "token_cache_ttl": 3600,
+                }
+            },
+            connector_id="test-conn-id",
+            redis_client=fake_redis,
+        )
+
+    assert result["status_code"] == 200
+    cached = await fake_redis.get("oauth2:test-conn-id")
+    assert cached == "tok123"
+
+
+async def test_oauth2_cc_uses_cache():
+    from fakeredis import FakeAsyncRedis
+    fake_redis = FakeAsyncRedis(decode_responses=True)
+    await fake_redis.set("oauth2:test-conn-id", "cached_token", ex=3600)
+
+    with respx.mock:
+        token_route = respx.post("https://auth.example.com/token").mock(
+            return_value=httpx.Response(200, json={"access_token": "new_token"})
+        )
+        api_route = respx.get(BASE + "/data").mock(return_value=httpx.Response(200, json={}))
+
+        await rest_engine.execute(
+            base_url=BASE, method="GET", path="/data",
+            advanced_config={
+                "oauth2_client_credentials": {
+                    "token_url": "https://auth.example.com/token",
+                    "client_id": "cid",
+                    "client_secret": "csecret",
+                }
+            },
+            connector_id="test-conn-id",
+            redis_client=fake_redis,
+        )
+
+    assert token_route.call_count == 0
+    auth_header = api_route.calls[0].request.headers.get("authorization", "")
+    assert auth_header == "Bearer cached_token"

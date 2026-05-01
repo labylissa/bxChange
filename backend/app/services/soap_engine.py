@@ -1,5 +1,6 @@
 """SOAP Engine — zeep-based client wrapping sync calls in a thread pool."""
 import asyncio
+import logging
 from typing import Any
 
 from app.services import transformer as _transformer
@@ -17,6 +18,8 @@ try:
     from lxml import etree as _lxml_etree
 except ImportError:
     _lxml_etree = None
+
+_log = logging.getLogger(__name__)
 
 
 # ── Custom exceptions ──────────────────────────────────────────────────────────
@@ -47,6 +50,58 @@ class SOAPTimeoutError(Exception):
 
 # ── Internal sync helpers ──────────────────────────────────────────────────────
 
+def _parse_soap_advanced(raw: dict | None) -> dict:
+    if not raw:
+        return {
+            "service_name": None, "port_name": None, "operation_timeout": 30,
+            "custom_headers": {}, "ws_security": None,
+            "response_path": None, "force_list_paths": [],
+        }
+    return {
+        "service_name": raw.get("service_name"),
+        "port_name": raw.get("port_name"),
+        "operation_timeout": raw.get("operation_timeout", 30),
+        "custom_headers": raw.get("custom_headers") or {},
+        "ws_security": raw.get("ws_security"),
+        "response_path": raw.get("response_path"),
+        "force_list_paths": raw.get("force_list_paths") or [],
+    }
+
+
+def _build_wsse(ws_security: dict | None) -> Any:
+    if not ws_security or ws_security.get("type") != "username_token":
+        return None
+    try:
+        from zeep.wsse import UsernameToken
+        return UsernameToken(
+            username=ws_security.get("username", ""),
+            password=ws_security.get("password"),
+            use_digest=False,
+            timestamp_token=ws_security.get("timestamp", True),
+        )
+    except Exception:
+        return None
+
+
+def _apply_response_path(data: dict, path: str | None) -> dict:
+    if not path:
+        return data
+    try:
+        current: Any = data
+        for key in path.split("."):
+            if isinstance(current, dict):
+                current = current[key]
+            else:
+                _log.warning("response_path '%s' not found in result", path)
+                return data
+        if isinstance(current, dict):
+            return current
+        return {"value": current}
+    except (KeyError, TypeError):
+        _log.warning("response_path '%s' not found in result", path)
+        return data
+
+
 def _build_session(auth_type: str, auth_config: dict, extra_headers: dict) -> Session:
     session = Session()
     if extra_headers:
@@ -66,15 +121,23 @@ def _build_session(auth_type: str, auth_config: dict, extra_headers: dict) -> Se
     return session
 
 
-def _load_client(wsdl_url: str, session: Session, timeout: int, plugins: list | None = None) -> Client:
-    transport = Transport(
-        session=session,
-        timeout=timeout,
-        operation_timeout=timeout,
-    )
+def _load_client(
+    wsdl_url: str,
+    session: Session,
+    timeout: int,
+    plugins: list | None = None,
+    wsse: Any = None,
+) -> Client:
+    transport = Transport(session=session, timeout=timeout, operation_timeout=timeout)
     zeep_settings = ZeepSettings(strict=False, xml_huge_tree=True)
     try:
-        return Client(wsdl=wsdl_url, transport=transport, settings=zeep_settings, plugins=plugins or [])
+        return Client(
+            wsdl=wsdl_url,
+            transport=transport,
+            settings=zeep_settings,
+            plugins=plugins or [],
+            wsse=wsse,
+        )
     except req_exc.ConnectionError as exc:
         raise SOAPConnectionError(f"Cannot connect to WSDL host: {exc}") from exc
     except req_exc.Timeout as exc:
@@ -140,13 +203,25 @@ def _execute_sync(
     auth_config: dict,
     extra_headers: dict,
     timeout: int,
+    advanced: dict | None = None,
 ) -> str | dict:
-    session = _build_session(auth_type, auth_config, extra_headers)
+    adv = _parse_soap_advanced(advanced)
+    merged_headers = {**extra_headers, **adv["custom_headers"]}
+    session = _build_session(auth_type, auth_config, merged_headers)
     history = HistoryPlugin()
-    client = _load_client(wsdl_url, session, timeout, plugins=[history])
+    wsse = _build_wsse(adv["ws_security"])
+    client = _load_client(wsdl_url, session, timeout, plugins=[history], wsse=wsse)
+
+    # Bind to specific service/port if configured
+    service_proxy = client.service
+    if adv["service_name"] or adv["port_name"]:
+        try:
+            service_proxy = client.bind(adv["service_name"], adv["port_name"])
+        except Exception:
+            pass
 
     try:
-        service_method = getattr(client.service, operation)
+        service_method = getattr(service_proxy, operation)
     except AttributeError:
         try:
             port = next(iter(next(iter(client.wsdl.services.values())).ports.values()))
@@ -167,8 +242,6 @@ def _execute_sync(
         raise SOAPConnectionError(f"Connection failed: {exc}") from exc
 
     # Return raw XML so the transformer uses the same XML tag names as /preview-transform.
-    # Without this, zeep's serialize_object produces different key names (e.g. "result"
-    # instead of "AddResult"), causing transform_config rules to silently have no effect.
     if _lxml_etree is not None:
         try:
             envelope = history.last_received.get("envelope") if history.last_received else None
@@ -196,9 +269,14 @@ async def execute(
     headers: dict | None = None,
     timeout: int = 30,
     transform_config: dict | None = None,
+    advanced_config: dict | None = None,
 ) -> dict:
     """Execute a SOAP operation and return the serialised response."""
-    result = await asyncio.to_thread(
+    adv = _parse_soap_advanced(advanced_config)
+    op_timeout = adv["operation_timeout"]
+    force_list_paths = adv["force_list_paths"]
+
+    coro = asyncio.to_thread(
         _execute_sync,
         wsdl_url,
         operation,
@@ -207,12 +285,23 @@ async def execute(
         auth_config or {},
         headers or {},
         timeout,
+        advanced_config,
     )
-    # When HistoryPlugin captured raw XML, run it through the full transformer pipeline
-    # (parse → unwrap envelope → clean namespaces → apply config) so that key names
-    # match exactly what /preview-transform produces from the same XML.
+    try:
+        result = await asyncio.wait_for(coro, timeout=op_timeout)
+    except asyncio.TimeoutError:
+        raise SOAPTimeoutError(f"Operation '{operation}' timed out after {op_timeout}s")
+
+    # Run through transformer pipeline; force_list_paths flows via transform_config extension
+    effective_tc = dict(transform_config) if transform_config else {}
+    if force_list_paths:
+        effective_tc.setdefault("force_list_paths", force_list_paths)
+
     if isinstance(result, str):
-        return _transformer.transform(result, transform_config)
-    if transform_config is not None:
-        return _transformer.transform(result, transform_config)
-    return result
+        final = _transformer.transform(result, effective_tc or None)
+    elif effective_tc:
+        final = _transformer.transform(result, effective_tc)
+    else:
+        final = result
+
+    return _apply_response_path(final, adv["response_path"])
