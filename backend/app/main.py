@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from sqlalchemy import select, text
 
-from app.api.v1 import admin, admin_licenses, api_keys, auth, billing, connectors, executions, logs, scim, scheduled_jobs, sso, team, webhooks
+from app.api.v1 import admin, admin_licenses, api_keys, auth, billing, connectors, executions, logs, pipelines, scim, scheduled_jobs, sso, team, webhooks
 from app.core.config import settings
 from app.core.redis import _get_pool
 from app.core.security import hash_password
@@ -29,6 +29,7 @@ _TAGS_METADATA = [
     {"name": "scim", "description": "SCIM 2.0 — provisioning automatique via Azure AD / Okta"},
     {"name": "scheduled-jobs", "description": "Exécutions automatiques planifiées (cron ou interval)"},
     {"name": "webhooks", "description": "Endpoints de notification après chaque exécution — livrés avec signature HMAC"},
+    {"name": "pipelines", "description": "Pipelines — enchaîner plusieurs connecteurs en un seul appel API"},
 ]
 
 _DESCRIPTION = """
@@ -138,6 +139,7 @@ app.include_router(scheduled_jobs.router, prefix="/api/v1")
 app.include_router(webhooks.router, prefix="/api/v1")
 app.include_router(admin_licenses.router, prefix="/api/v1")
 app.include_router(billing.router, prefix="/api/v1")
+app.include_router(pipelines.router, prefix="/api/v1")
 
 
 @app.on_event("startup")

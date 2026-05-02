@@ -25,9 +25,12 @@ def _make_session():
 def execute_scheduled_job(scheduled_job_id: str) -> dict:
     async def _run() -> dict:
         from app.models.connector import Connector
+        from app.models.pipeline import Pipeline
         from app.models.scheduled_job import ScheduledJob
+        from app.models.tenant import Tenant
         from app.schemas.scheduled_job import compute_next_run
         from app.services import execution_service
+        from app.services.pipeline_engine import PipelineEngine
 
         Session, engine = _make_session()
         try:
@@ -39,28 +42,50 @@ def execute_scheduled_job(scheduled_job_id: str) -> dict:
                 if not job or not job.is_active:
                     return {"status": "skipped", "reason": "job inactive or not found"}
 
-                connector = (await db.execute(
-                    select(Connector).where(Connector.id == job.connector_id)
-                )).scalar_one_or_none()
-
-                if not connector or connector.status == "disabled":
-                    return {"status": "skipped", "reason": "connector disabled or not found"}
-
-                exec_read = await execution_service.execute_connector(
-                    connector_id=job.connector_id,
-                    tenant_id=job.tenant_id,
-                    params=job.input_params or {},
-                    body=None,
-                    transform_override=None,
-                    triggered_by="scheduled",
-                    db=db,
-                )
-
                 job.last_run_at = datetime.utcnow()
                 job.next_run_at = compute_next_run(job.schedule_type, job.cron_expression, job.interval_seconds)
-                await db.commit()
 
-                return {"status": "ok", "execution_id": str(exec_read.id)}
+                if job.pipeline_id:
+                    pipeline = (await db.execute(
+                        select(Pipeline).where(Pipeline.id == job.pipeline_id)
+                    )).scalar_one_or_none()
+                    if not pipeline or not pipeline.is_active:
+                        return {"status": "skipped", "reason": "pipeline disabled or not found"}
+
+                    tenant = (await db.execute(
+                        select(Tenant).where(Tenant.id == job.tenant_id)
+                    )).scalar_one_or_none()
+
+                    pe_engine = PipelineEngine()
+                    result = await pe_engine.execute(
+                        pipeline=pipeline,
+                        input_params=job.input_params or {},
+                        tenant=tenant,
+                        db=db,
+                        triggered_by="scheduled",
+                    )
+                    await db.commit()
+                    return {"status": result.status, "pipeline_id": str(job.pipeline_id)}
+
+                else:
+                    connector = (await db.execute(
+                        select(Connector).where(Connector.id == job.connector_id)
+                    )).scalar_one_or_none()
+
+                    if not connector or connector.status == "disabled":
+                        return {"status": "skipped", "reason": "connector disabled or not found"}
+
+                    exec_read = await execution_service.execute_connector(
+                        connector_id=job.connector_id,
+                        tenant_id=job.tenant_id,
+                        params=job.input_params or {},
+                        body=None,
+                        transform_override=None,
+                        triggered_by="scheduled",
+                        db=db,
+                    )
+                    await db.commit()
+                    return {"status": "ok", "execution_id": str(exec_read.id)}
         finally:
             await engine.dispose()
 

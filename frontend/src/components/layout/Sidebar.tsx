@@ -1,10 +1,11 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Plug, ScrollText, Key, Settings, Zap, X, Shield, Users, BookOpen, ShieldCheck, Clock, Webhook, CreditCard, FileText } from 'lucide-react'
+import { LayoutDashboard, Plug, ScrollText, Key, Settings, Zap, X, Shield, Users, BookOpen, ShieldCheck, Clock, Webhook, CreditCard, FileText, GitMerge } from 'lucide-react'
 import { useIsSuperAdmin, useIsAdmin } from '@/stores/authStore'
 
 const dashboardItems = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/dashboard/connectors', label: 'Connecteurs', icon: Plug },
+  { to: '/dashboard/pipelines', label: 'Pipelines', icon: GitMerge },
   { to: '/dashboard/scheduled-jobs', label: 'Planification', icon: Clock },
   { to: '/dashboard/webhooks', label: 'Webhooks', icon: Webhook },
   { to: '/dashboard/logs', label: 'Logs', icon: ScrollText },

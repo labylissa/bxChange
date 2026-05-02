@@ -94,9 +94,10 @@ async def execute_connector(
     transform_override: dict | None,
     triggered_by: str = "dashboard",
     db: AsyncSession = None,
+    _skip_quota: bool = False,
 ) -> ExecutionRead:
-    # License / quota check
-    if tenant_id:
+    # License / quota check (skipped when pipeline_engine already called check_license_and_quota)
+    if not _skip_quota and tenant_id:
         tenant = (
             await db.execute(select(Tenant).where(Tenant.id == tenant_id))
         ).scalar_one_or_none()

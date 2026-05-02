@@ -11,8 +11,11 @@ class ScheduledJob(Base):
     __tablename__ = "scheduled_jobs"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    connector_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("connectors.id", ondelete="CASCADE"), nullable=False
+    connector_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("connectors.id", ondelete="CASCADE"), nullable=True
+    )
+    pipeline_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("pipelines.id", ondelete="CASCADE"), nullable=True
     )
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("tenants.id"), nullable=False

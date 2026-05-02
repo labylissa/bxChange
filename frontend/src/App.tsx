@@ -18,6 +18,9 @@ import { TenantsPage } from '@/features/admin/TenantsPage'
 import { TenantDetailPage } from '@/features/admin/TenantDetailPage'
 import { LicensesPage } from '@/features/admin/LicensesPage'
 import { BillingPage } from '@/features/billing/BillingPage'
+import { PipelinesPage } from '@/features/pipelines/PipelinesPage'
+import { PipelineWizard } from '@/features/pipelines/PipelineWizard'
+import { PipelineDetailPage } from '@/features/pipelines/PipelineDetailPage'
 import { SSOConfigPage } from '@/features/sso/SSOConfigPage'
 import { ScheduledJobsPage } from '@/features/scheduled-jobs/ScheduledJobsPage'
 import { WebhooksPage } from '@/features/webhooks/WebhooksPage'
@@ -49,6 +52,9 @@ export default function App() {
               <Route path="/dashboard/scheduled-jobs" element={<ScheduledJobsPage />} />
               <Route path="/dashboard/webhooks" element={<WebhooksPage />} />
               <Route path="/dashboard/billing" element={<BillingPage />} />
+              <Route path="/dashboard/pipelines" element={<PipelinesPage />} />
+              <Route path="/dashboard/pipelines/new" element={<PipelineWizard />} />
+              <Route path="/dashboard/pipelines/:id" element={<PipelineDetailPage />} />
               <Route path="/dashboard/settings" element={<SettingsPage />} />
 
               {/* Admin only: team management + SSO */}
