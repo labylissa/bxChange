@@ -13,6 +13,7 @@ from app.core.dependencies import get_current_user, get_db, get_execute_auth
 from app.models.connector import Connector
 from app.models.execution import Execution
 from app.models.subscription import Subscription
+from app.models.tenant import Tenant
 from app.models.user import User
 from app.schemas.connector import (
     ConnectorCreate,
@@ -27,7 +28,13 @@ from app.schemas.connector import (
 )
 from app.schemas.execution import ExecuteRequest, ExecuteResponse
 from app.services import crypto, execution_service, rest_engine, snippet_generator, soap_engine, transformer
-from app.services.execution_service import ConnectorNotFoundError, OperationRequiredError
+from app.services.execution_service import (
+    ConnectorNotFoundError,
+    LicenseExpiredError,
+    LicenseSuspendedError,
+    OperationRequiredError,
+    QuotaExceededError,
+)
 from app.services.rest_engine import RESTConnectionError, RESTResponseError, RESTSSLError, RESTTimeoutError
 from app.services.soap_engine import SOAPConnectionError, SOAPTimeoutError, WSDLLoadError
 
@@ -175,6 +182,7 @@ async def create_connector(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ConnectorRead:
+    # Legacy subscription-based quota check
     sub = (await db.execute(
         select(Subscription).where(Subscription.tenant_id == current_user.tenant_id)
     )).scalar_one_or_none()
@@ -193,6 +201,19 @@ async def create_connector(
                     "Contactez votre administrateur."
                 ),
             )
+
+    # License-based quota check
+    tenant = (await db.execute(
+        select(Tenant).where(Tenant.id == current_user.tenant_id)
+    )).scalar_one_or_none()
+    if tenant and tenant.connectors_count >= tenant.connectors_limit:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail=(
+                f"Quota de connecteurs atteint ({tenant.connectors_limit}). "
+                "Contactez sales@bxchange.io pour augmenter votre quota."
+            ),
+        )
 
     encrypted_auth: dict | None = None
     if payload.auth_config:
@@ -225,6 +246,8 @@ async def create_connector(
         created_by=current_user.id,
     )
     db.add(connector)
+    if tenant:
+        tenant.connectors_count += 1
     await db.commit()
     await db.refresh(connector)
     return ConnectorRead.model_validate(connector)
@@ -329,6 +352,13 @@ async def delete_connector(
 
     await db.execute(delete(Execution).where(Execution.connector_id == connector_id))
     await db.delete(connector)
+
+    tenant = (await db.execute(
+        select(Tenant).where(Tenant.id == current_user.tenant_id)
+    )).scalar_one_or_none()
+    if tenant:
+        tenant.connectors_count = max(0, tenant.connectors_count - 1)
+
     await db.commit()
 
 
@@ -379,6 +409,8 @@ async def execute_connector(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connector not found")
     except OperationRequiredError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="operation is required for SOAP connectors")
+    except (LicenseSuspendedError, LicenseExpiredError, QuotaExceededError) as exc:
+        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=str(exc))
 
     return ExecuteResponse(
         execution_id=exec_read.id,

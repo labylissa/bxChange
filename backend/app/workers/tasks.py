@@ -100,6 +100,82 @@ def poll_scheduled_jobs() -> dict:
     return asyncio.run(_poll())
 
 
+@celery_app.task(name="reset_monthly_executions")
+def reset_monthly_executions() -> dict:
+    async def _run() -> dict:
+        from app.models.tenant import Tenant
+
+        Session, engine = _make_session()
+        try:
+            async with Session() as db:
+                tenants = (await db.execute(
+                    select(Tenant).where(Tenant.license_status.in_(["active", "trial"]))
+                )).scalars().all()
+                for tenant in tenants:
+                    tenant.executions_used = 0
+                await db.commit()
+                _log.info("Monthly reset: %d tenants reset", len(tenants))
+                return {"reset_count": len(tenants)}
+        finally:
+            await engine.dispose()
+
+    return asyncio.run(_run())
+
+
+@celery_app.task(name="check_license_expiry")
+def check_license_expiry() -> dict:
+    async def _run() -> dict:
+        from datetime import timedelta
+
+        from app.models.license import License
+        from app.models.tenant import Tenant
+
+        Session, engine = _make_session()
+        expired_count = 0
+        warning_count = 0
+        now = datetime.utcnow()
+
+        try:
+            async with Session() as db:
+                # Auto-expire licenses past contract_end
+                tenants = (await db.execute(select(Tenant))).scalars().all()
+                for tenant in tenants:
+                    if (
+                        tenant.license_status in ("active", "trial")
+                        and tenant.contract_end
+                        and tenant.contract_end < now
+                    ):
+                        tenant.license_status = "expired"
+                        expired_count += 1
+                        _log.warning(
+                            "License expired: tenant=%s contract_end=%s",
+                            tenant.name,
+                            tenant.contract_end,
+                        )
+
+                    # Warn when expiry is within 30 days
+                    if (
+                        tenant.license_status == "active"
+                        and tenant.contract_end
+                        and now < tenant.contract_end <= now + timedelta(days=30)
+                    ):
+                        days = (tenant.contract_end - now).days
+                        _log.warning(
+                            "License expiring soon: tenant=%s days_remaining=%d",
+                            tenant.name,
+                            days,
+                        )
+                        warning_count += 1
+
+                await db.commit()
+        finally:
+            await engine.dispose()
+
+        return {"expired": expired_count, "warnings": warning_count}
+
+    return asyncio.run(_run())
+
+
 class _NeedsRetry(Exception):
     def __init__(self, cause: Exception) -> None:
         self.cause = cause

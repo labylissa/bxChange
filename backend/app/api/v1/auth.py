@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from jose import JWTError
@@ -67,6 +67,7 @@ async def register(
     tenant = Tenant(
         name=payload.full_name or payload.email.split("@")[0],
         slug=str(uuid.uuid4()),
+        trial_ends_at=datetime.utcnow() + timedelta(days=14),
     )
     db.add(tenant)
     await db.flush()

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
@@ -115,7 +115,11 @@ async def create_tenant(
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
 
-    tenant = Tenant(name=payload.company_name, slug=str(uuid.uuid4()))
+    tenant = Tenant(
+        name=payload.company_name,
+        slug=str(uuid.uuid4()),
+        trial_ends_at=datetime.utcnow() + timedelta(days=14),
+    )
     db.add(tenant)
     await db.flush()
 

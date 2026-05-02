@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 
 from app.core.config import settings
 
@@ -17,5 +18,13 @@ celery_app.conf.beat_schedule = {
     "scheduler-ticker": {
         "task": "poll_scheduled_jobs",
         "schedule": 60.0,
-    }
+    },
+    "reset-monthly": {
+        "task": "reset_monthly_executions",
+        "schedule": crontab(day_of_month=1, hour=0, minute=0),
+    },
+    "check-license-expiry": {
+        "task": "check_license_expiry",
+        "schedule": crontab(hour=8, minute=0),
+    },
 }

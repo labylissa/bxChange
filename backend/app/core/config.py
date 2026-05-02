@@ -18,8 +18,12 @@ class Settings(BaseSettings):
     # SSO / SP settings
     sp_entity_id: str = "https://app.bxchange.io"
     sp_acs_url: str = "https://app.bxchange.io/api/v1/sso/acs"
-    sp_certificate: str = ""   # PEM, no headers, single line
-    sp_private_key: str = ""   # PEM, no headers, single line
+    sp_certificate: str = ""
+    sp_private_key: str = ""
+    # Stripe
+    stripe_secret_key: str = ""
+    stripe_publishable_key: str = ""
+    stripe_webhook_secret: str = ""
 
     model_config = {"env_file": ".env"}
 

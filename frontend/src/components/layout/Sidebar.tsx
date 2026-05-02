@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Plug, ScrollText, Key, Settings, Zap, X, Shield, Users, BookOpen, ShieldCheck, Clock, Webhook } from 'lucide-react'
+import { LayoutDashboard, Plug, ScrollText, Key, Settings, Zap, X, Shield, Users, BookOpen, ShieldCheck, Clock, Webhook, CreditCard, FileText } from 'lucide-react'
 import { useIsSuperAdmin, useIsAdmin } from '@/stores/authStore'
 
 const dashboardItems = [
@@ -10,6 +10,7 @@ const dashboardItems = [
   { to: '/dashboard/logs', label: 'Logs', icon: ScrollText },
   { to: '/dashboard/api-keys', label: 'API Keys', icon: Key },
   { to: '/dashboard/api-docs', label: 'API Docs', icon: BookOpen },
+  { to: '/dashboard/billing', label: 'Facturation', icon: CreditCard },
   { to: '/dashboard/settings', label: 'Paramètres', icon: Settings },
 ]
 
@@ -65,6 +66,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               {[
                 { to: '/admin', label: 'Admin', icon: Shield },
                 { to: '/admin/tenants', label: 'Clients', icon: Users },
+                { to: '/admin/licenses', label: 'Licences', icon: FileText },
               ].map(({ to, label, icon: Icon }) => (
                 <NavLink
                   key={to}

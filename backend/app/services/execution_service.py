@@ -11,24 +11,36 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.redis import _get_pool as _redis_pool
 from app.models.connector import Connector
 from app.models.execution import Execution
+from app.models.tenant import Tenant
 from app.schemas.execution import ExecutionRead
 from app.services import crypto, rest_engine, soap_engine, transformer
 
 
 class ConnectorNotFoundError(Exception):
-    """Raised when the connector does not exist or belongs to another tenant."""
+    pass
 
 
 class OperationRequiredError(Exception):
-    """Raised when a SOAP execution has no operation in params and none stored on the connector."""
+    pass
 
 
 class UnsupportedConnectorTypeError(Exception):
-    """Raised for an unknown connector type."""
+    pass
+
+
+class LicenseSuspendedError(Exception):
+    pass
+
+
+class LicenseExpiredError(Exception):
+    pass
+
+
+class QuotaExceededError(Exception):
+    pass
 
 
 def _coerce_soap_params(params: dict) -> dict:
-    """Convert string values to int/float where possible — zeep needs typed values."""
     coerced: dict = {}
     for k, v in params.items():
         if isinstance(v, str):
@@ -46,6 +58,34 @@ def _coerce_soap_params(params: dict) -> dict:
     return coerced
 
 
+async def check_license_and_quota(tenant: Tenant) -> None:
+    if tenant.license_status == "suspended":
+        raise LicenseSuspendedError(
+            "Votre licence est suspendue. Contactez support@bxchange.io"
+        )
+
+    if tenant.license_status == "expired":
+        raise LicenseExpiredError(
+            "Votre licence a expiré. Contactez sales@bxchange.io pour renouveler."
+        )
+
+    if (
+        tenant.license_status == "trial"
+        and tenant.trial_ends_at
+        and tenant.trial_ends_at < datetime.utcnow()
+    ):
+        tenant.license_status = "expired"
+        raise LicenseExpiredError("Votre période d'essai de 14 jours est terminée.")
+
+    if tenant.executions_used >= tenant.executions_limit:
+        raise QuotaExceededError(
+            f"Quota mensuel atteint ({tenant.executions_limit} exécutions). "
+            "Contactez sales@bxchange.io pour augmenter votre quota."
+        )
+
+    tenant.executions_used += 1
+
+
 async def execute_connector(
     connector_id: uuid.UUID,
     tenant_id: uuid.UUID,
@@ -55,11 +95,14 @@ async def execute_connector(
     triggered_by: str = "dashboard",
     db: AsyncSession = None,
 ) -> ExecutionRead:
-    """Run a connector and persist the execution record.
+    # License / quota check
+    if tenant_id:
+        tenant = (
+            await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+        ).scalar_one_or_none()
+        if tenant:
+            await check_license_and_quota(tenant)
 
-    Always returns an ExecutionRead — sets status='error' on engine failures
-    so the caller always gets an execution_id back.
-    """
     result = await db.execute(
         select(Connector).where(
             Connector.id == connector_id,
@@ -142,7 +185,14 @@ async def execute_connector(
         if effective_transform:
             result_data = transformer.transform(transform_input, effective_transform)
 
-    except (ConnectorNotFoundError, OperationRequiredError, UnsupportedConnectorTypeError):
+    except (
+        ConnectorNotFoundError,
+        OperationRequiredError,
+        UnsupportedConnectorTypeError,
+        LicenseSuspendedError,
+        LicenseExpiredError,
+        QuotaExceededError,
+    ):
         raise
     except Exception as exc:
         status = "error"
@@ -164,7 +214,6 @@ async def execute_connector(
     await db.commit()
     await db.refresh(execution)
 
-    # Dispatch webhooks — best-effort, never blocks the response
     try:
         from app.services import webhook_dispatcher
         await webhook_dispatcher.dispatch(

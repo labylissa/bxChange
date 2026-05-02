@@ -16,6 +16,8 @@ import { APIDocsPage } from '@/features/docs/APIDocsPage'
 import { AdminPage } from '@/features/admin/AdminPage'
 import { TenantsPage } from '@/features/admin/TenantsPage'
 import { TenantDetailPage } from '@/features/admin/TenantDetailPage'
+import { LicensesPage } from '@/features/admin/LicensesPage'
+import { BillingPage } from '@/features/billing/BillingPage'
 import { SSOConfigPage } from '@/features/sso/SSOConfigPage'
 import { ScheduledJobsPage } from '@/features/scheduled-jobs/ScheduledJobsPage'
 import { WebhooksPage } from '@/features/webhooks/WebhooksPage'
@@ -46,6 +48,7 @@ export default function App() {
               <Route path="/dashboard/api-docs" element={<APIDocsPage />} />
               <Route path="/dashboard/scheduled-jobs" element={<ScheduledJobsPage />} />
               <Route path="/dashboard/webhooks" element={<WebhooksPage />} />
+              <Route path="/dashboard/billing" element={<BillingPage />} />
               <Route path="/dashboard/settings" element={<SettingsPage />} />
 
               {/* Admin only: team management + SSO */}
@@ -61,6 +64,7 @@ export default function App() {
                 <Route path="/admin" element={<AdminPage />} />
                 <Route path="/admin/tenants" element={<TenantsPage />} />
                 <Route path="/admin/tenants/:id" element={<TenantDetailPage />} />
+                <Route path="/admin/licenses" element={<LicensesPage />} />
               </Route>
             </Route>
           </Route>

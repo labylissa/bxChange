@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from sqlalchemy import select, text
 
-from app.api.v1 import admin, api_keys, auth, connectors, executions, logs, scim, scheduled_jobs, sso, team, webhooks
+from app.api.v1 import admin, admin_licenses, api_keys, auth, billing, connectors, executions, logs, scim, scheduled_jobs, sso, team, webhooks
 from app.core.config import settings
 from app.core.redis import _get_pool
 from app.core.security import hash_password
@@ -23,6 +23,7 @@ _TAGS_METADATA = [
     {"name": "api-keys", "description": "Clés d'authentification pour vos applications (préfixe `bxc_`)"},
     {"name": "team", "description": "Gestion des membres du tenant (Admin uniquement)"},
     {"name": "admin", "description": "Gestion des tenants et utilisateurs (Super Admin uniquement)"},
+    {"name": "billing", "description": "Licensing enterprise — quotas, usage, factures Stripe"},
     {"name": "health", "description": "Statut de la plateforme"},
     {"name": "sso", "description": "SSO Enterprise — config SAML/OIDC, ACS, tokens SCIM"},
     {"name": "scim", "description": "SCIM 2.0 — provisioning automatique via Azure AD / Okta"},
@@ -135,6 +136,8 @@ app.include_router(sso.router, prefix="/api/v1")
 app.include_router(scim.router, prefix="/api/v1")
 app.include_router(scheduled_jobs.router, prefix="/api/v1")
 app.include_router(webhooks.router, prefix="/api/v1")
+app.include_router(admin_licenses.router, prefix="/api/v1")
+app.include_router(billing.router, prefix="/api/v1")
 
 
 @app.on_event("startup")
