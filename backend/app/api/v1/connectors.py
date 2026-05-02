@@ -53,15 +53,13 @@ _504 = {"description": "Timeout du service tiers"}
 
 async def _get_connector(
     connector_id: uuid.UUID,
-    tenant_id: uuid.UUID,
+    tenant_id: uuid.UUID | None,
     db: AsyncSession,
 ) -> Connector:
-    result = await db.execute(
-        select(Connector).where(
-            Connector.id == connector_id,
-            Connector.tenant_id == tenant_id,
-        )
-    )
+    filters = [Connector.id == connector_id]
+    if tenant_id is not None:
+        filters.append(Connector.tenant_id == tenant_id)
+    result = await db.execute(select(Connector).where(*filters))
     connector = result.scalar_one_or_none()
     if connector is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connector not found")
@@ -264,9 +262,10 @@ async def list_connectors(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[ConnectorRead]:
-    result = await db.execute(
-        select(Connector).where(Connector.tenant_id == current_user.tenant_id)
-    )
+    stmt = select(Connector)
+    if current_user.tenant_id is not None:
+        stmt = stmt.where(Connector.tenant_id == current_user.tenant_id)
+    result = await db.execute(stmt)
     connectors = result.scalars().all()
     return [ConnectorRead.model_validate(c) for c in connectors]
 

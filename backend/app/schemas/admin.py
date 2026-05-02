@@ -90,3 +90,9 @@ class QuotaRead(BaseModel):
     connector_limit: int | None
     user_count: int
     users_limit: int | None
+
+
+class PlanUpdate(BaseModel):
+    plan: str
+    connector_limit: int | None = None
+    users_limit: int | None = None

@@ -30,9 +30,10 @@ async def list_api_keys(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[ApiKeyRead]:
-    result = await db.execute(
-        select(ApiKey).where(ApiKey.tenant_id == current_user.tenant_id)
-    )
+    stmt = select(ApiKey)
+    if current_user.tenant_id is not None:
+        stmt = stmt.where(ApiKey.tenant_id == current_user.tenant_id)
+    result = await db.execute(stmt)
     return [ApiKeyRead.model_validate(k) for k in result.scalars().all()]
 
 

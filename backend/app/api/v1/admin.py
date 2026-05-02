@@ -18,6 +18,7 @@ from app.schemas.admin import (
     ActivateUpdate,
     AdminUserRead,
     ImpersonateResponse,
+    PlanUpdate,
     QuotaUpdate,
     RoleUpdate,
     TenantCreate,
@@ -214,6 +215,69 @@ async def update_quota(
 
     await db.commit()
     return {"connector_limit": payload.connector_limit, "users_limit": payload.users_limit}
+
+
+@router.patch(
+    "/tenants/{tenant_id}/plan",
+    summary="Changer le plan d'un tenant",
+    description="Modifie le plan (starter/professional/enterprise) et les quotas associés.",
+    responses={200: {"description": "Plan mis à jour"}, 401: _401, 403: _403, 404: _404_tenant},
+)
+async def update_plan(
+    tenant_id: uuid.UUID,
+    payload: PlanUpdate,
+    _: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    VALID_PLANS = {"starter", "professional", "enterprise"}
+    if payload.plan not in VALID_PLANS:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail=f"Invalid plan. Must be one of: {', '.join(sorted(VALID_PLANS))}")
+    tenant = await _get_tenant_or_404(tenant_id, db)
+    sub = (await db.execute(
+        select(Subscription).where(Subscription.tenant_id == tenant.id)
+    )).scalar_one_or_none()
+
+    if sub is None:
+        sub = Subscription(
+            tenant_id=tenant.id,
+            plan=payload.plan,
+            status="active",
+            connector_limit=payload.connector_limit,
+            users_limit=payload.users_limit,
+        )
+        db.add(sub)
+    else:
+        sub.plan = payload.plan
+        if payload.connector_limit is not None:
+            sub.connector_limit = payload.connector_limit
+        if payload.users_limit is not None:
+            sub.users_limit = payload.users_limit
+
+    await db.commit()
+    return {"plan": payload.plan, "connector_limit": sub.connector_limit, "users_limit": sub.users_limit}
+
+
+@router.patch(
+    "/tenants/{tenant_id}/reactivate",
+    status_code=status.HTTP_200_OK,
+    summary="Réactiver un tenant",
+    description="Réactive tous les utilisateurs du tenant.",
+    responses={200: {"description": "Tenant réactivé"}, 401: _401, 403: _403, 404: _404_tenant},
+)
+async def reactivate_tenant(
+    tenant_id: uuid.UUID,
+    _: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    tenant = await _get_tenant_or_404(tenant_id, db)
+    users = (await db.execute(
+        select(User).where(User.tenant_id == tenant.id)
+    )).scalars().all()
+    for user in users:
+        user.is_active = True
+    await db.commit()
+    return {"reactivated": len(users)}
 
 
 @router.delete(

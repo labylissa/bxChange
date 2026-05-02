@@ -249,6 +249,18 @@ async def get_quota(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> QuotaRead:
+    if current_user.tenant_id is None:
+        connector_count = (await db.execute(
+            select(func.count(Connector.id)).where(Connector.status != "disabled")
+        )).scalar_one()
+        user_count = (await db.execute(select(func.count(User.id)))).scalar_one()
+        return QuotaRead(
+            connector_count=connector_count,
+            connector_limit=None,
+            user_count=user_count,
+            users_limit=None,
+        )
+
     sub = (await db.execute(
         select(Subscription).where(Subscription.tenant_id == current_user.tenant_id)
     )).scalar_one_or_none()

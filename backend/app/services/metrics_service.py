@@ -30,13 +30,15 @@ def _percentile(values: list, pct: float) -> float:
     return float(sorted_vals[min(idx, len(sorted_vals) - 1)])
 
 
-async def compute_metrics(tenant_id: uuid.UUID, period: str, db: AsyncSession) -> dict:
+async def compute_metrics(tenant_id: uuid.UUID | None, period: str, db: AsyncSession) -> dict:
     delta = _PERIODS.get(period, timedelta(hours=24))
     now = datetime.utcnow()
     since = now - delta
     since_24h = now - timedelta(hours=24)
 
     # ── Aggregate totals (single SQL round-trip) ──────────────────────────
+    tenant_filter = [Connector.tenant_id == tenant_id] if tenant_id is not None else []
+
     agg = (
         await db.execute(
             select(
@@ -47,7 +49,7 @@ async def compute_metrics(tenant_id: uuid.UUID, period: str, db: AsyncSession) -
                 func.avg(Execution.duration_ms).label("avg_dur"),
             )
             .join(Connector, Execution.connector_id == Connector.id)
-            .where(Connector.tenant_id == tenant_id, Execution.created_at >= since)
+            .where(*tenant_filter, Execution.created_at >= since)
         )
     ).one()
 
@@ -64,7 +66,7 @@ async def compute_metrics(tenant_id: uuid.UUID, period: str, db: AsyncSession) -
             select(Execution.duration_ms)
             .join(Connector, Execution.connector_id == Connector.id)
             .where(
-                Connector.tenant_id == tenant_id,
+                *tenant_filter,
                 Execution.created_at >= since,
                 Execution.duration_ms.isnot(None),
             )
@@ -84,7 +86,7 @@ async def compute_metrics(tenant_id: uuid.UUID, period: str, db: AsyncSession) -
         await db.execute(
             select(Execution.created_at, Execution.status)
             .join(Connector, Execution.connector_id == Connector.id)
-            .where(Connector.tenant_id == tenant_id, Execution.created_at >= since_24h)
+            .where(*tenant_filter, Execution.created_at >= since_24h)
         )
     ).all()
     for (created_at, status) in hourly:
@@ -106,7 +108,7 @@ async def compute_metrics(tenant_id: uuid.UUID, period: str, db: AsyncSession) -
                 func.sum(_error_case()).label("errors"),
             )
             .join(Connector, Execution.connector_id == Connector.id)
-            .where(Connector.tenant_id == tenant_id, Execution.created_at >= since)
+            .where(*tenant_filter, Execution.created_at >= since)
             .group_by(Execution.connector_id, Connector.name)
             .order_by(func.count().desc())
             .limit(10)
@@ -135,11 +137,13 @@ async def compute_metrics(tenant_id: uuid.UUID, period: str, db: AsyncSession) -
     }
 
 
-async def compute_alerts(tenant_id: uuid.UUID, db: AsyncSession) -> list[dict]:
+async def compute_alerts(tenant_id: uuid.UUID | None, db: AsyncSession) -> list[dict]:
     since_1h = datetime.utcnow() - timedelta(hours=1)
     alerts: list[dict] = []
 
     # ── Error-rate alert: >20% errors in last 1 h per connector ──────────
+    alert_tenant_filter = [Connector.tenant_id == tenant_id] if tenant_id is not None else []
+
     err_rows = (
         await db.execute(
             select(
@@ -150,7 +154,7 @@ async def compute_alerts(tenant_id: uuid.UUID, db: AsyncSession) -> list[dict]:
                 func.min(Execution.created_at).label("since"),
             )
             .join(Connector, Execution.connector_id == Connector.id)
-            .where(Connector.tenant_id == tenant_id, Execution.created_at >= since_1h)
+            .where(*alert_tenant_filter, Execution.created_at >= since_1h)
             .group_by(Execution.connector_id, Connector.name)
         )
     ).all()
@@ -175,7 +179,7 @@ async def compute_alerts(tenant_id: uuid.UUID, db: AsyncSession) -> list[dict]:
             select(Execution.connector_id, Connector.name, Execution.duration_ms)
             .join(Connector, Execution.connector_id == Connector.id)
             .where(
-                Connector.tenant_id == tenant_id,
+                *alert_tenant_filter,
                 Execution.created_at >= since_1h,
                 Execution.duration_ms.isnot(None),
             )

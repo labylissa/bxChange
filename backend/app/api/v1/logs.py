@@ -51,6 +51,8 @@ async def get_recent(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[dict]:
+    recent_filter = ([Connector.tenant_id == current_user.tenant_id]
+                     if current_user.tenant_id is not None else [])
     rows = (
         await db.execute(
             select(
@@ -62,7 +64,7 @@ async def get_recent(
                 Execution.created_at,
             )
             .join(Connector, Execution.connector_id == Connector.id)
-            .where(Connector.tenant_id == current_user.tenant_id)
+            .where(*recent_filter)
             .order_by(Execution.created_at.desc())
             .limit(50)
         )
@@ -91,6 +93,8 @@ async def get_errors(
     db: AsyncSession = Depends(get_db),
 ) -> list[dict]:
     since_24h = datetime.utcnow() - timedelta(hours=24)
+    errors_filter = ([Connector.tenant_id == current_user.tenant_id]
+                     if current_user.tenant_id is not None else [])
     rows = (
         await db.execute(
             select(
@@ -103,7 +107,7 @@ async def get_errors(
             )
             .join(Connector, Execution.connector_id == Connector.id)
             .where(
-                Connector.tenant_id == current_user.tenant_id,
+                *errors_filter,
                 Execution.status.in_(["error", "timeout"]),
                 Execution.created_at >= since_24h,
             )

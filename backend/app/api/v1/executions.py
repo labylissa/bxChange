@@ -47,11 +47,9 @@ async def list_executions(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[ExecutionRead]:
-    stmt = (
-        select(Execution)
-        .join(Connector, Execution.connector_id == Connector.id)
-        .where(Connector.tenant_id == current_user.tenant_id)
-    )
+    stmt = select(Execution).join(Connector, Execution.connector_id == Connector.id)
+    if current_user.tenant_id is not None:
+        stmt = stmt.where(Connector.tenant_id == current_user.tenant_id)
 
     if connector_id is not None:
         stmt = stmt.where(Execution.connector_id == connector_id)

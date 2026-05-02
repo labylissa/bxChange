@@ -80,6 +80,14 @@ export const adminApi = {
   deactivateTenant: (id: string) =>
     apiClient.delete(`/api/v1/admin/tenants/${id}`),
 
+  reactivateTenant: (id: string) =>
+    apiClient.patch(`/api/v1/admin/tenants/${id}/reactivate`).then((r) => r.data),
+
+  changePlan: (id: string, plan: string, connector_limit?: number, users_limit?: number) =>
+    apiClient
+      .patch(`/api/v1/admin/tenants/${id}/plan`, { plan, connector_limit, users_limit })
+      .then((r) => r.data),
+
   getUsers: () =>
     apiClient.get<AdminUserRead[]>('/api/v1/admin/users').then((r) => r.data),
 
