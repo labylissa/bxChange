@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Plug, ScrollText, Key, Settings, Zap, X, Shield, Users, BookOpen, ShieldCheck, Clock, Webhook, CreditCard, FileText, GitMerge, HelpCircle } from 'lucide-react'
+import { LayoutDashboard, Plug, ScrollText, Key, Settings, Zap, X, Shield, Users, BookOpen, ShieldCheck, Clock, Webhook, CreditCard, FileText, GitMerge, HelpCircle, Lock } from 'lucide-react'
 import { useIsSuperAdmin, useIsAdmin } from '@/stores/authStore'
 
 const dashboardItems = [
@@ -11,6 +11,7 @@ const dashboardItems = [
   { to: '/dashboard/webhooks', label: 'Webhooks', icon: Webhook },
   { to: '/dashboard/logs', label: 'Logs', icon: ScrollText },
   { to: '/dashboard/api-keys', label: 'API Keys', icon: Key },
+  { to: '/dashboard/security', label: 'Sécurité', icon: Lock },
   { to: '/dashboard/api-docs', label: 'API Docs', icon: BookOpen },
   { to: '/dashboard/billing', label: 'Facturation', icon: CreditCard },
   { to: '/dashboard/settings', label: 'Paramètres', icon: Settings },

@@ -26,6 +26,7 @@ import { PipelineDocs } from '@/features/pipelines/PipelineDocs'
 import { SSOConfigPage } from '@/features/sso/SSOConfigPage'
 import { ScheduledJobsPage } from '@/features/scheduled-jobs/ScheduledJobsPage'
 import { WebhooksPage } from '@/features/webhooks/WebhooksPage'
+import { SecurityPage } from '@/features/security/SecurityPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -60,6 +61,7 @@ export default function App() {
               <Route path="/dashboard/pipelines/:id/edit" element={<PipelineEditPage />} />
               <Route path="/dashboard/pipelines/:id" element={<PipelineDetailPage />} />
               <Route path="/dashboard/settings" element={<SettingsPage />} />
+              <Route path="/dashboard/security" element={<SecurityPage />} />
 
               {/* Admin only: team management + SSO */}
               <Route element={<RoleGuard requiredRole="admin" />}>
