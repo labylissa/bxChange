@@ -26,7 +26,14 @@ def generate_snippet(
     connector_name: str,
     lang: str,
     api_key_hint: str | None,
+    connector_operation: str | None = None,
 ) -> str:
+    """Generate a code snippet for executing a connector.
+
+    connector_operation: the default SOAP operation stored on the connector.
+    When absent, the snippet includes "operation" in the example params so the
+    caller knows they must supply it at runtime.
+    """
     if lang not in SUPPORTED_LANGS:
         raise ValueError(f"Unsupported language: {lang!r}. Supported: {sorted(SUPPORTED_LANGS)}")
 
@@ -35,31 +42,40 @@ def generate_snippet(
     snake = _to_snake(connector_name)
     camel = _to_camel(connector_name)
     pascal = _to_pascal(connector_name)
+    show_operation = not (connector_operation and connector_operation.strip())
 
     if lang == "curl":
-        return _curl(url, key)
+        return _curl(url, key, show_operation)
     if lang == "python":
-        return _python(url, key, snake)
+        return _python(url, key, snake, show_operation)
     if lang == "javascript":
-        return _javascript(url, key, camel)
+        return _javascript(url, key, camel, show_operation)
     if lang == "php":
-        return _php(url, key, snake)
-    return _java(url, key, pascal)
+        return _php(url, key, snake, show_operation)
+    return _java(url, key, pascal, show_operation)
 
 
-def _curl(url: str, key: str) -> str:
+def _curl(url: str, key: str, show_operation: bool) -> str:
+    body_lines = []
+    if show_operation:
+        body_lines.append('    "operation": "NomOperation",')
+    body_lines.append('    "param1": "value1"')
     lines = [
         f"curl -X POST {url} \\",
         f'  -H "X-API-Key: {key}" \\',
         '  -H "Content-Type: application/json" \\',
         "  -d '{",
-        '    "param1": "value1"',
+        *body_lines,
         "  }'",
     ]
     return "\n".join(lines) + "\n"
 
 
-def _python(url: str, key: str, snake: str) -> str:
+def _python(url: str, key: str, snake: str, show_operation: bool) -> str:
+    example_lines = []
+    if show_operation:
+        example_lines.append('    "operation": "NomOperation",')
+    example_lines.append('    "param1": "value1",')
     lines = [
         "import httpx",
         "import asyncio",
@@ -78,15 +94,19 @@ def _python(url: str, key: str, snake: str) -> str:
         "",
         "",
         f"result = asyncio.run(call_{snake}({{",
-        '    "param1": "value1",',
+        *example_lines,
         "}))",
         "print(result)",
     ]
     return "\n".join(lines) + "\n"
 
 
-def _javascript(url: str, key: str, camel: str) -> str:
+def _javascript(url: str, key: str, camel: str, show_operation: bool) -> str:
     fn_name = (camel[0].upper() + camel[1:]) if camel else "Connector"
+    if show_operation:
+        call_args = "{ operation: 'NomOperation', param1: 'value1' }"
+    else:
+        call_args = "{ param1: 'value1' }"
     lines = [
         f"async function call{fn_name}(params) {{",
         "  const response = await fetch(",
@@ -105,14 +125,18 @@ def _javascript(url: str, key: str, camel: str) -> str:
         "}",
         "",
         "// Exemple d'appel",
-        f"call{fn_name}({{ param1: 'value1' }})",
+        f"call{fn_name}({call_args})",
         "  .then(result => console.log(result))",
         "  .catch(console.error);",
     ]
     return "\n".join(lines) + "\n"
 
 
-def _php(url: str, key: str, snake: str) -> str:
+def _php(url: str, key: str, snake: str, show_operation: bool) -> str:
+    if show_operation:
+        call_args = "['operation' => 'NomOperation', 'param1' => 'value1']"
+    else:
+        call_args = "['param1' => 'value1']"
     lines = [
         "<?php",
         f"function call_{snake}(array $params): array {{",
@@ -133,13 +157,21 @@ def _php(url: str, key: str, snake: str) -> str:
         "}",
         "",
         "// Exemple d'appel",
-        f"$result = call_{snake}(['param1' => 'value1']);",
+        f"$result = call_{snake}({call_args});",
         "print_r($result);",
     ]
     return "\n".join(lines) + "\n"
 
 
-def _java(url: str, key: str, pascal: str) -> str:
+def _java(url: str, key: str, pascal: str, show_operation: bool) -> str:
+    if show_operation:
+        example_comment = (
+            '    // Exemple : Map.of("operation", "NomOperation", "param1", "value1")'
+        )
+    else:
+        example_comment = (
+            '    // Exemple : Map.of("param1", "value1")'
+        )
     lines = [
         "import java.net.http.*;",
         "import java.net.URI;",
@@ -164,6 +196,8 @@ def _java(url: str, key: str, pascal: str) -> str:
         "        var response = client.send(request, HttpResponse.BodyHandlers.ofString());",
         "        return response.body();",
         "    }",
+        "",
+        example_comment,
         "}",
     ]
     return "\n".join(lines) + "\n"

@@ -557,6 +557,7 @@ async def get_snippet(
         connector_name=connector.name,
         lang=lang,
         api_key_hint=key_hint,
+        connector_operation=connector.operation,
     )
 
     return SnippetResponse(

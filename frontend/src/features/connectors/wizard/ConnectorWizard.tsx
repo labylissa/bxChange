@@ -465,17 +465,22 @@ export function ConnectorWizard({ onClose }: Props) {
           {s.wsdlOperations.length > 0 && (
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-gray-700">
-                Opération ({s.wsdlOperations.length} disponibles)
+                Opération par défaut{' '}
+                <span className="font-normal text-gray-400">({s.wsdlOperations.length} disponibles)</span>
               </label>
               <select
                 className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                 value={s.selectedOperation}
                 onChange={(e) => patch({ selectedOperation: e.target.value })}
               >
+                <option value="">— Aucune (à spécifier à chaque appel) —</option>
                 {s.wsdlOperations.map((op) => (
                   <option key={op} value={op}>{op}</option>
                 ))}
               </select>
+              <p className="text-xs text-gray-400">
+                Optionnel — peut être passé à chaque appel via le champ <code className="bg-gray-100 px-1 rounded">operation</code> des params.
+              </p>
             </div>
           )}
         </div>
@@ -818,8 +823,8 @@ export function ConnectorWizard({ onClose }: Props) {
     if (step === 1) return !!s.type && s.name.trim().length > 0
     if (step === 2) {
       if (s.type === 'soap') {
-        if (s.wsdlSource === 'url') return s.wsdlUrl.trim().length > 0 && s.wsdlOperations.length > 0 && !!s.selectedOperation
-        return s.wsdlFileId !== null && s.wsdlOperations.length > 0 && !!s.selectedOperation
+        if (s.wsdlSource === 'url') return s.wsdlUrl.trim().length > 0 && s.wsdlOperations.length > 0
+        return s.wsdlFileId !== null && s.wsdlOperations.length > 0
       }
       return s.baseUrl.trim().length > 0
     }

@@ -112,3 +112,64 @@ def test_all_langs_produce_output(lang: str):
     assert len(s) > 50
     assert f"/{_ID}/execute" in s
     assert "bxc_test_key" in s
+
+
+# ── connector_operation — show/hide "operation" in example params ──────────────
+
+def test_no_connector_operation_shows_operation_param_curl():
+    s = generate_snippet(_ID, _NAME, "curl", None, connector_operation=None)
+    assert '"operation": "NomOperation"' in s
+
+
+def test_connector_operation_set_hides_operation_param_curl():
+    s = generate_snippet(_ID, _NAME, "curl", None, connector_operation="NumberToWords")
+    assert '"operation"' not in s
+
+
+def test_no_connector_operation_shows_operation_param_python():
+    s = generate_snippet(_ID, _NAME, "python", None, connector_operation=None)
+    assert '"operation": "NomOperation"' in s
+
+
+def test_connector_operation_set_hides_operation_param_python():
+    s = generate_snippet(_ID, _NAME, "python", None, connector_operation="Add")
+    assert '"operation"' not in s
+
+
+def test_no_connector_operation_shows_operation_param_javascript():
+    s = generate_snippet(_ID, _NAME, "javascript", None, connector_operation=None)
+    assert "operation: 'NomOperation'" in s
+
+
+def test_connector_operation_set_hides_operation_param_javascript():
+    s = generate_snippet(_ID, _NAME, "javascript", None, connector_operation="GetUser")
+    assert "operation:" not in s
+
+
+def test_no_connector_operation_shows_operation_param_php():
+    s = generate_snippet(_ID, _NAME, "php", None, connector_operation=None)
+    assert "'operation' => 'NomOperation'" in s
+
+
+def test_connector_operation_set_hides_operation_param_php():
+    s = generate_snippet(_ID, _NAME, "php", None, connector_operation="DoSomething")
+    assert "'operation'" not in s
+
+
+def test_empty_string_operation_treated_as_absent():
+    """Empty string connector_operation should still show operation in params."""
+    s = generate_snippet(_ID, _NAME, "curl", None, connector_operation="")
+    assert '"operation": "NomOperation"' in s
+
+
+@pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGS))
+def test_all_langs_show_operation_when_absent(lang: str):
+    s = generate_snippet(_ID, "Test Connector", lang, None, connector_operation=None)
+    assert "NomOperation" in s
+
+
+@pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGS))
+def test_all_langs_hide_operation_when_set(lang: str):
+    s = generate_snippet(_ID, "Test Connector", lang, None, connector_operation="MyOp")
+    # Java uses a comment; check NomOperation (the placeholder) is absent, not "operation" keyword
+    assert "NomOperation" not in s
