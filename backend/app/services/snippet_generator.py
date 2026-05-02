@@ -30,9 +30,9 @@ def generate_snippet(
 ) -> str:
     """Generate a code snippet for executing a connector.
 
-    connector_operation: the default SOAP operation stored on the connector.
-    When absent, the snippet includes "operation" in the example params so the
-    caller knows they must supply it at runtime.
+    The /execute endpoint expects {"params": {...}} — all templates wrap accordingly.
+    connector_operation: default SOAP operation stored on the connector. When absent,
+    the snippet includes "operation" in the example params so the caller knows to supply it.
     """
     if lang not in SUPPORTED_LANGS:
         raise ValueError(f"Unsupported language: {lang!r}. Supported: {sorted(SUPPORTED_LANGS)}")
@@ -56,16 +56,18 @@ def generate_snippet(
 
 
 def _curl(url: str, key: str, show_operation: bool) -> str:
-    body_lines = []
+    param_lines = []
     if show_operation:
-        body_lines.append('    "operation": "NomOperation",')
-    body_lines.append('    "param1": "value1"')
+        param_lines.append('      "operation": "NomOperation",')
+    param_lines.append('      "param1": "value1"')
     lines = [
         f"curl -X POST {url} \\",
         f'  -H "X-API-Key: {key}" \\',
         '  -H "Content-Type: application/json" \\',
         "  -d '{",
-        *body_lines,
+        '    "params": {',
+        *param_lines,
+        "    }",
         "  }'",
     ]
     return "\n".join(lines) + "\n"
@@ -86,7 +88,7 @@ def _python(url: str, key: str, snake: str, show_operation: bool) -> str:
         "        response = await client.post(",
         f'            "{url}",',
         f'            headers={{"X-API-Key": "{key}"}},',
-        "            json=params,",
+        '            json={"params": params},',
         "            timeout=30.0,",
         "        )",
         "        response.raise_for_status()",
@@ -117,7 +119,7 @@ def _javascript(url: str, key: str, camel: str, show_operation: bool) -> str:
         f"        'X-API-Key': '{key}',",
         "        'Content-Type': 'application/json',",
         "      },",
-        "      body: JSON.stringify(params),",
+        "      body: JSON.stringify({ params }),",
         "    }",
         "  );",
         f"  if (!response.ok) throw new Error(`bxChange error: ${{response.status}}`);",
@@ -148,7 +150,7 @@ def _php(url: str, key: str, snake: str, show_operation: bool) -> str:
         f"            'X-API-Key: {key}',",
         "            'Content-Type: application/json',",
         "        ],",
-        "        CURLOPT_POSTFIELDS => json_encode($params),",
+        "        CURLOPT_POSTFIELDS => json_encode(['params' => $params]),",
         "        CURLOPT_TIMEOUT => 30,",
         "    ]);",
         "    $response = curl_exec($ch);",
@@ -175,15 +177,16 @@ def _java(url: str, key: str, pascal: str, show_operation: bool) -> str:
     lines = [
         "import java.net.http.*;",
         "import java.net.URI;",
+        "import java.util.Map;",
         "import com.fasterxml.jackson.databind.ObjectMapper;",
         "",
         f"public class {pascal}Client {{",
         f'    private static final String API_KEY = "{key}";',
         f'    private static final String URL = "{url}";',
         "",
-        "    public static String execute(Object params) throws Exception {",
+        "    public static String execute(Map<String, Object> params) throws Exception {",
         "        var mapper = new ObjectMapper();",
-        "        var body = mapper.writeValueAsString(params);",
+        '        var body = mapper.writeValueAsString(Map.of("params", params));',
         "",
         "        var request = HttpRequest.newBuilder()",
         "            .uri(URI.create(URL))",

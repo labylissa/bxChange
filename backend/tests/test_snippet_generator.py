@@ -64,7 +64,7 @@ def test_javascript_snippet_structure():
     s = generate_snippet(_ID, _NAME, "javascript", None)
     assert "async function callMonConnecteurSoap" in s
     assert "await fetch(" in s
-    assert "JSON.stringify(params)" in s
+    assert "JSON.stringify({ params })" in s
     assert "X-API-Key" in s
 
 
