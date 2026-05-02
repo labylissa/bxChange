@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, Play, CheckCircle, XCircle, Clock, Minus, RefreshCw, Key } from 'lucide-react'
+import { ChevronLeft, Play, CheckCircle, XCircle, Clock, Minus, RefreshCw, Key, Pencil } from 'lucide-react'
 import { pipelinesApi, type PipelineExecutionRead } from '@/lib/api/pipelines'
 import { PipelineGraph } from './PipelineGraph'
 
@@ -241,6 +241,7 @@ function HistoryTab({ pipelineId }: { pipelineId: string }) {
 export function PipelineDetailPage() {
   const { id } = useParams<{ id: string }>()
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const [tab, setTab] = useState<Tab>('overview')
 
   const { data: pipeline, isLoading } = useQuery({
@@ -284,12 +285,21 @@ export function PipelineDetailPage() {
             {pipeline.steps.length} step{pipeline.steps.length > 1 ? 's' : ''} · fusion: {pipeline.merge_strategy} · {pipeline.executions_count} exécution{pipeline.executions_count !== 1 ? 's' : ''}
           </p>
         </div>
-        <button
-          onClick={handleToggleActive}
-          className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600"
-        >
-          {pipeline.is_active ? 'Désactiver' : 'Activer'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate(`/dashboard/pipelines/${id}/edit`)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            Éditer
+          </button>
+          <button
+            onClick={handleToggleActive}
+            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600"
+          >
+            {pipeline.is_active ? 'Désactiver' : 'Activer'}
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}

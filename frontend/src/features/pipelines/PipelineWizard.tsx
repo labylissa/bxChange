@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { ChevronRight, ChevronLeft, Plus, Trash2, GripVertical, GitMerge } from 'lucide-react'
-import { pipelinesApi, type PipelineStepCreate } from '@/lib/api/pipelines'
+import { useNavigate, Link } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { ChevronRight, ChevronLeft, Plus, Trash2, GripVertical, GitMerge, HelpCircle } from 'lucide-react'
+import { pipelinesApi, type PipelineRead, type PipelineStepCreate } from '@/lib/api/pipelines'
 import { connectorsApi, type Connector } from '@/lib/api/connectors'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -64,7 +64,6 @@ function StepModal({
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-          {/* Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
             <input
@@ -74,7 +73,6 @@ function StepModal({
             />
           </div>
 
-          {/* Connector */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Connecteur</label>
             <select
@@ -89,7 +87,6 @@ function StepModal({
             </select>
           </div>
 
-          {/* Execution mode */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Mode d'exécution</label>
             <div className="flex gap-3">
@@ -103,13 +100,12 @@ function StepModal({
                     onChange={() => setDraft((d) => ({ ...d, execution_mode: m }))}
                     className="accent-brand-600"
                   />
-                  <span className="text-sm text-gray-700 capitalize">{m === 'sequential' ? 'Séquentiel' : 'Parallèle'}</span>
+                  <span className="text-sm text-gray-700">{m === 'sequential' ? 'Séquentiel' : 'Parallèle'}</span>
                 </label>
               ))}
             </div>
           </div>
 
-          {/* On error */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">En cas d'erreur</label>
             <select
@@ -123,7 +119,6 @@ function StepModal({
             </select>
           </div>
 
-          {/* Timeout */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Timeout (secondes)</label>
             <input
@@ -136,7 +131,6 @@ function StepModal({
             />
           </div>
 
-          {/* Condition */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Condition (optionnel)</label>
             <input
@@ -147,7 +141,6 @@ function StepModal({
             />
           </div>
 
-          {/* Params template */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Params template (JSON)</label>
             {previousSteps.length > 0 && (
@@ -188,15 +181,34 @@ function StepModal({
 
 // ── Main Wizard ────────────────────────────────────────────────────────────────
 
-export function PipelineWizard() {
+export function PipelineWizard({ pipeline }: { pipeline?: PipelineRead } = {}) {
+  const isEditMode = !!pipeline
   const navigate = useNavigate()
-  const [step, setStep] = useState(1)
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [mergeStrategy, setMergeStrategy] = useState<'merge' | 'first' | 'last' | 'custom'>('merge')
-  const [outputTransformText, setOutputTransformText] = useState('{}')
+  const qc = useQueryClient()
+
+  const [wizardStep, setWizardStep] = useState(1)
+  const [name, setName] = useState(pipeline?.name ?? '')
+  const [description, setDescription] = useState(pipeline?.description ?? '')
+  const [mergeStrategy, setMergeStrategy] = useState<'merge' | 'first' | 'last' | 'custom'>(
+    pipeline?.merge_strategy ?? 'merge'
+  )
+  const [outputTransformText, setOutputTransformText] = useState(
+    pipeline?.output_transform ? JSON.stringify(pipeline.output_transform, null, 2) : '{}'
+  )
   const [outputTransformError, setOutputTransformError] = useState('')
-  const [steps, setSteps] = useState<StepDraft[]>([])
+  const [steps, setSteps] = useState<StepDraft[]>(
+    pipeline?.steps.map((s) => ({
+      _key: s.id,
+      connector_id: s.connector_id,
+      step_order: s.step_order,
+      name: s.name,
+      execution_mode: s.execution_mode,
+      params_template: s.params_template,
+      condition: s.condition,
+      on_error: s.on_error,
+      timeout_seconds: s.timeout_seconds,
+    })) ?? []
+  )
   const [editingStep, setEditingStep] = useState<{ step: StepDraft; index: number } | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -252,17 +264,26 @@ export function PipelineWizard() {
     setSubmitting(true)
     setError('')
     try {
-      const created = await pipelinesApi.create({
+      const payload = {
         name,
         description: description || undefined,
         merge_strategy: mergeStrategy,
         output_transform: outputTransform,
         steps: steps.map(({ _key, ...s }) => s),
-      })
-      navigate(`/dashboard/pipelines/${created.id}`)
+      }
+
+      if (isEditMode) {
+        await pipelinesApi.update(pipeline.id, payload)
+        qc.invalidateQueries({ queryKey: ['pipeline', pipeline.id] })
+        qc.invalidateQueries({ queryKey: ['pipelines'] })
+        navigate(`/dashboard/pipelines/${pipeline.id}`)
+      } else {
+        const created = await pipelinesApi.create(payload)
+        navigate(`/dashboard/pipelines/${created.id}`)
+      }
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setError(msg ?? 'Erreur lors de la création')
+      setError(msg ?? (isEditMode ? 'Erreur lors de la modification' : 'Erreur lors de la création'))
       setSubmitting(false)
     }
   }
@@ -271,16 +292,22 @@ export function PipelineWizard() {
     <div className="max-w-2xl mx-auto space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Nouveau pipeline</h1>
-        <p className="text-sm text-gray-500 mt-1">Enchaînez des connecteurs en 4 étapes</p>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {isEditMode ? 'Modifier le pipeline' : 'Nouveau pipeline'}
+        </h1>
+        <p className="text-sm text-gray-500 mt-1">
+          {isEditMode
+            ? `Modification de "${pipeline.name}"`
+            : 'Enchaînez des connecteurs en 4 étapes'}
+        </p>
       </div>
 
       {/* Step indicator */}
       <div className="flex items-center gap-2">
         {['Informations', 'Étapes', 'Transform', 'Récapitulatif'].map((label, i) => (
           <div key={label} className="flex items-center gap-2">
-            <div className={`flex items-center gap-1.5 ${i + 1 === step ? 'text-brand-600' : i + 1 < step ? 'text-green-600' : 'text-gray-400'}`}>
-              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border-2 ${i + 1 === step ? 'border-brand-600 bg-brand-50' : i + 1 < step ? 'border-green-600 bg-green-50' : 'border-gray-300'}`}>
+            <div className={`flex items-center gap-1.5 ${i + 1 === wizardStep ? 'text-brand-600' : i + 1 < wizardStep ? 'text-green-600' : 'text-gray-400'}`}>
+              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border-2 ${i + 1 === wizardStep ? 'border-brand-600 bg-brand-50' : i + 1 < wizardStep ? 'border-green-600 bg-green-50' : 'border-gray-300'}`}>
                 {i + 1}
               </span>
               <span className="text-sm font-medium hidden sm:block">{label}</span>
@@ -290,10 +317,19 @@ export function PipelineWizard() {
         ))}
       </div>
 
-      {/* Step 1 — Informations */}
-      {step === 1 && (
+      {/* Wizard step 1 — Informations */}
+      {wizardStep === 1 && (
         <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-          <h2 className="font-semibold text-gray-800">Informations générales</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-gray-800">Informations générales</h2>
+            <Link
+              to="/dashboard/pipelines/docs"
+              className="flex items-center gap-1 text-xs text-gray-400 hover:text-brand-600 transition-colors"
+            >
+              <HelpCircle className="h-3.5 w-3.5" />
+              Comment ça marche ?
+            </Link>
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Nom du pipeline *</label>
             <input
@@ -332,11 +368,11 @@ export function PipelineWizard() {
         </div>
       )}
 
-      {/* Step 2 — Steps */}
-      {step === 2 && (
+      {/* Wizard step 2 — Steps */}
+      {wizardStep === 2 && (
         <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
           <h2 className="font-semibold text-gray-800">Étapes du pipeline</h2>
-          <p className="text-sm text-gray-500">Minimum 2 étapes. Ordonnez par glisser-déposer (visuel) ou en éditant step_order.</p>
+          <p className="text-sm text-gray-500">Minimum 2 étapes. Cliquez "Éditer" pour configurer les params et les variables.</p>
 
           <div className="space-y-2">
             {steps.map((s, idx) => {
@@ -379,8 +415,8 @@ export function PipelineWizard() {
         </div>
       )}
 
-      {/* Step 3 — Transform */}
-      {step === 3 && (
+      {/* Wizard step 3 — Transform */}
+      {wizardStep === 3 && (
         <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
           <h2 className="font-semibold text-gray-800">Transform final (optionnel)</h2>
           <p className="text-sm text-gray-500">Appliqué sur le résultat fusionné. Laissez vide ou <code className="bg-gray-100 px-1 rounded">{'{}'}</code> pour ignorer.</p>
@@ -394,15 +430,16 @@ export function PipelineWizard() {
         </div>
       )}
 
-      {/* Step 4 — Recap */}
-      {step === 4 && (
+      {/* Wizard step 4 — Recap */}
+      {wizardStep === 4 && (
         <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
           <h2 className="font-semibold text-gray-800">Récapitulatif</h2>
           <div className="space-y-2 text-sm">
             <div className="flex gap-3"><span className="text-gray-500 w-28">Nom</span><span className="font-medium text-gray-900">{name}</span></div>
             {description && <div className="flex gap-3"><span className="text-gray-500 w-28">Description</span><span className="text-gray-700">{description}</span></div>}
             <div className="flex gap-3"><span className="text-gray-500 w-28">Fusion</span><span className="font-medium text-gray-900">{mergeStrategy}</span></div>
-            <div className="flex gap-3"><span className="text-gray-500 w-28">Steps</span>
+            <div className="flex gap-3">
+              <span className="text-gray-500 w-28">Steps</span>
               <div className="flex-1 space-y-1">
                 {steps.map((s) => {
                   const c = connectors.find((x) => x.id === s.connector_id)
@@ -424,17 +461,21 @@ export function PipelineWizard() {
       {/* Navigation */}
       <div className="flex justify-between">
         <button
-          onClick={() => step > 1 ? setStep((s) => s - 1) : navigate('/dashboard/pipelines')}
+          onClick={() =>
+            wizardStep > 1
+              ? setWizardStep((s) => s - 1)
+              : navigate(isEditMode ? `/dashboard/pipelines/${pipeline.id}` : '/dashboard/pipelines')
+          }
           className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-gray-900"
         >
           <ChevronLeft className="h-4 w-4" />
-          {step > 1 ? 'Précédent' : 'Annuler'}
+          {wizardStep > 1 ? 'Précédent' : 'Annuler'}
         </button>
 
-        {step < 4 ? (
+        {wizardStep < 4 ? (
           <button
-            onClick={() => setStep((s) => s + 1)}
-            disabled={step === 1 ? !canProceedStep1 : step === 2 ? !canProceedStep2 : false}
+            onClick={() => setWizardStep((s) => s + 1)}
+            disabled={wizardStep === 1 ? !canProceedStep1 : wizardStep === 2 ? !canProceedStep2 : false}
             className="flex items-center gap-2 px-5 py-2 bg-brand-600 text-white text-sm rounded-lg hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Suivant <ChevronRight className="h-4 w-4" />
@@ -446,7 +487,9 @@ export function PipelineWizard() {
             className="flex items-center gap-2 px-5 py-2 bg-brand-600 text-white text-sm rounded-lg hover:bg-brand-700 disabled:opacity-60"
           >
             <GitMerge className="h-4 w-4" />
-            {submitting ? 'Création…' : 'Créer le pipeline'}
+            {submitting
+              ? isEditMode ? 'Sauvegarde…' : 'Création…'
+              : isEditMode ? 'Sauvegarder les modifications' : 'Créer le pipeline'}
           </button>
         )}
       </div>

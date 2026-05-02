@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { GitMerge, Plus, Trash2, Eye } from 'lucide-react'
+import { GitMerge, Plus, Trash2, Eye, Pencil, HelpCircle } from 'lucide-react'
 import { pipelinesApi, type PipelineRead } from '@/lib/api/pipelines'
 
 function StatusBadge({ active }: { active: boolean }) {
@@ -45,13 +45,23 @@ export function PipelinesPage() {
           <h1 className="text-2xl font-bold text-gray-900">Pipelines</h1>
           <p className="text-sm text-gray-500 mt-1">Enchaînez plusieurs connecteurs en un seul appel API</p>
         </div>
-        <Link
-          to="/dashboard/pipelines/new"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          Nouveau pipeline
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/dashboard/pipelines/docs"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 text-gray-600 text-sm font-medium hover:bg-gray-50 transition-colors"
+            title="Documentation Pipeline"
+          >
+            <HelpCircle className="h-4 w-4" />
+            Guide
+          </Link>
+          <Link
+            to="/dashboard/pipelines/new"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Nouveau pipeline
+          </Link>
+        </div>
       </div>
 
       {isLoading ? (
@@ -97,13 +107,20 @@ export function PipelinesPage() {
                   <td className="px-4 py-3"><StatusBadge active={p.is_active} /></td>
                   <td className="px-4 py-3 text-gray-600">{p.executions_count}</td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 justify-end">
+                    <div className="flex items-center gap-1 justify-end">
                       <Link
                         to={`/dashboard/pipelines/${p.id}`}
                         className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded"
                         title="Voir"
                       >
                         <Eye className="h-4 w-4" />
+                      </Link>
+                      <Link
+                        to={`/dashboard/pipelines/${p.id}/edit`}
+                        className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded"
+                        title="Éditer"
+                      >
+                        <Pencil className="h-4 w-4" />
                       </Link>
                       <button
                         onClick={() => handleDelete(p)}

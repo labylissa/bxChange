@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Plug, ScrollText, Key, Settings, Zap, X, Shield, Users, BookOpen, ShieldCheck, Clock, Webhook, CreditCard, FileText, GitMerge } from 'lucide-react'
+import { LayoutDashboard, Plug, ScrollText, Key, Settings, Zap, X, Shield, Users, BookOpen, ShieldCheck, Clock, Webhook, CreditCard, FileText, GitMerge, HelpCircle } from 'lucide-react'
 import { useIsSuperAdmin, useIsAdmin } from '@/stores/authStore'
 
 const dashboardItems = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/dashboard/connectors', label: 'Connecteurs', icon: Plug },
   { to: '/dashboard/pipelines', label: 'Pipelines', icon: GitMerge },
+  { to: '/dashboard/pipelines/docs', label: 'Guide Pipelines', icon: HelpCircle, sub: true },
   { to: '/dashboard/scheduled-jobs', label: 'Planification', icon: Clock },
   { to: '/dashboard/webhooks', label: 'Webhooks', icon: Webhook },
   { to: '/dashboard/logs', label: 'Logs', icon: ScrollText },
@@ -121,21 +122,25 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           )}
 
           {/* Main nav */}
-          {dashboardItems.map(({ to, label, icon: Icon }) => (
+          {dashboardItems.map(({ to, label, icon: Icon, sub }) => (
             <NavLink
               key={to}
               to={to}
               end={to === '/dashboard'}
               onClick={onClose}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                `flex items-center gap-3 rounded-lg text-sm font-medium transition-colors ${
+                  sub ? 'pl-8 pr-3 py-1.5' : 'px-3 py-2'
+                } ${
                   isActive
                     ? 'bg-brand-50 text-brand-700'
+                    : sub
+                    ? 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
                     : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                 }`
               }
             >
-              <Icon className="h-4 w-4 flex-shrink-0" />
+              <Icon className={`flex-shrink-0 ${sub ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} />
               {label}
             </NavLink>
           ))}
