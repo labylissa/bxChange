@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Plug, Wifi, Globe, Play, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Plug, Wifi, Globe, Play, Pencil, Trash2, Search, ChevronDown } from 'lucide-react'
 import type { Connector } from '@/lib/api/connectors'
 import { connectorsApi } from '@/lib/api/connectors'
 import { quotaApi } from '@/lib/api/admin'
@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
 import { Spinner } from '@/components/ui/Spinner'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
+import { useToast } from '@/stores/toastStore'
 import { ConnectorWizard } from './wizard/ConnectorWizard'
 
 function statusVariant(status: string): 'green' | 'red' | 'gray' | 'yellow' {
@@ -30,69 +32,60 @@ function relativeTime(iso: string): string {
 
 function ConnectorCard({ connector, onDelete }: { connector: Connector; onDelete: (id: string) => void }) {
   const navigate = useNavigate()
-  const isDeleting = false
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
 
   return (
-    <Card className="flex flex-col gap-4 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-lg ${connector.type === 'soap' ? 'bg-purple-50' : 'bg-blue-50'}`}>
-            {connector.type === 'soap'
-              ? <Wifi className="h-5 w-5 text-purple-600" />
-              : <Globe className="h-5 w-5 text-blue-600" />
-            }
+    <>
+      <Card className="flex flex-col gap-4 hover:shadow-md transition-shadow">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg ${connector.type === 'soap' ? 'bg-purple-50' : 'bg-blue-50'}`}>
+              {connector.type === 'soap'
+                ? <Wifi className="h-5 w-5 text-purple-600" />
+                : <Globe className="h-5 w-5 text-blue-600" />}
+            </div>
+            <div>
+              <h3 className="font-semibold text-gray-900 text-sm">{connector.name}</h3>
+              <p className="text-xs text-gray-400 mt-0.5">{relativeTime(connector.created_at)}</p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-semibold text-gray-900 text-sm">{connector.name}</h3>
-            <p className="text-xs text-gray-400 mt-0.5">{relativeTime(connector.created_at)}</p>
+          <div className="flex items-center gap-2">
+            <Badge variant={connector.type === 'soap' ? 'blue' : 'gray'}>{connector.type.toUpperCase()}</Badge>
+            <Badge variant={statusVariant(connector.status)}>{connector.status}</Badge>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge variant={connector.type === 'soap' ? 'blue' : 'gray'}>
-            {connector.type.toUpperCase()}
-          </Badge>
-          <Badge variant={statusVariant(connector.status)}>
-            {connector.status}
-          </Badge>
-        </div>
-      </div>
 
-      {(connector.base_url || connector.wsdl_url) && (
-        <p className="text-xs text-gray-400 truncate font-mono">
-          {connector.base_url ?? connector.wsdl_url}
-        </p>
+        {(connector.base_url || connector.wsdl_url) && (
+          <p className="text-xs text-gray-400 truncate font-mono">
+            {connector.base_url ?? connector.wsdl_url}
+          </p>
+        )}
+
+        <div className="flex items-center gap-2 pt-1 border-t border-gray-100">
+          <Button size="sm" variant="secondary" onClick={() => navigate(`/dashboard/connectors/${connector.id}`)} className="flex items-center gap-1">
+            <Play className="h-3 w-3" /> Tester
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => navigate(`/dashboard/connectors/${connector.id}`)} className="flex items-center gap-1">
+            <Pencil className="h-3 w-3" /> Éditer
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setDeleteConfirm(true)}
+            className="flex items-center gap-1 ml-auto text-red-500 hover:bg-red-50">
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        </div>
+      </Card>
+
+      {deleteConfirm && (
+        <ConfirmModal
+          title="Supprimer le connecteur"
+          message={`Supprimer "${connector.name}" ? Cette action est irréversible — l'historique d'exécutions sera également supprimé.`}
+          confirmLabel="Supprimer"
+          danger
+          onConfirm={() => { onDelete(connector.id); setDeleteConfirm(false) }}
+          onCancel={() => setDeleteConfirm(false)}
+        />
       )}
-
-      <div className="flex items-center gap-2 pt-1 border-t border-gray-100">
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() => navigate(`/dashboard/connectors/${connector.id}`)}
-          className="flex items-center gap-1"
-        >
-          <Play className="h-3 w-3" /> Tester
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => navigate(`/dashboard/connectors/${connector.id}`)}
-          className="flex items-center gap-1"
-        >
-          <Pencil className="h-3 w-3" /> Éditer
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => {
-            if (confirm(`Supprimer "${connector.name}" ?`)) onDelete(connector.id)
-          }}
-          loading={isDeleting}
-          className="flex items-center gap-1 ml-auto text-red-500 hover:bg-red-50"
-        >
-          <Trash2 className="h-3 w-3" />
-        </Button>
-      </div>
-    </Card>
+    </>
   )
 }
 
@@ -101,35 +94,27 @@ function QuotaBar({ count, limit }: { count: number; limit: number | null }) {
   const pct = Math.min(100, Math.round((count / limit) * 100))
   const isWarning = pct >= 80
   const isMaxed = count >= limit
-
   return (
     <Card padding="sm" className={isMaxed ? 'border-red-200 bg-red-50' : isWarning ? 'border-yellow-200 bg-yellow-50' : ''}>
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-xs font-medium text-gray-700">
-          {count} / {limit} connecteurs utilisés
-        </span>
-        <span className={`text-xs font-semibold ${isMaxed ? 'text-red-600' : isWarning ? 'text-yellow-700' : 'text-gray-500'}`}>
-          {pct}%
-        </span>
+        <span className="text-xs font-medium text-gray-700">{count} / {limit} connecteurs utilisés</span>
+        <span className={`text-xs font-semibold ${isMaxed ? 'text-red-600' : isWarning ? 'text-yellow-700' : 'text-gray-500'}`}>{pct}%</span>
       </div>
       <div className="w-full bg-gray-200 rounded-full h-1.5">
-        <div
-          className={`h-1.5 rounded-full transition-all ${isMaxed ? 'bg-red-500' : isWarning ? 'bg-yellow-500' : 'bg-brand-600'}`}
-          style={{ width: `${pct}%` }}
-        />
+        <div className={`h-1.5 rounded-full transition-all ${isMaxed ? 'bg-red-500' : isWarning ? 'bg-yellow-500' : 'bg-brand-600'}`} style={{ width: `${pct}%` }} />
       </div>
-      {isMaxed && (
-        <p className="text-xs text-red-600 mt-1.5">
-          Quota atteint. Contactez votre administrateur pour augmenter la limite.
-        </p>
-      )}
+      {isMaxed && <p className="text-xs text-red-600 mt-1.5">Quota atteint. Contactez votre administrateur pour augmenter la limite.</p>}
     </Card>
   )
 }
 
 export function ConnectorsPage() {
   const [wizardOpen, setWizardOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
   const qc = useQueryClient()
+  const toast = useToast()
 
   const { data: connectors, isLoading } = useQuery({
     queryKey: ['connectors'],
@@ -145,38 +130,78 @@ export function ConnectorsPage() {
 
   const deleteConnector = useMutation({
     mutationFn: (id: string) => connectorsApi.deleteConnector(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['connectors'] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['connectors'] }); toast.success('Connecteur supprimé') },
+    onError: () => toast.error('Erreur lors de la suppression'),
   })
+
+  const filtered = (connectors ?? []).filter((c) => {
+    const q = search.toLowerCase()
+    if (q && !c.name.toLowerCase().includes(q) && !(c.base_url ?? c.wsdl_url ?? '').toLowerCase().includes(q)) return false
+    if (typeFilter !== 'all' && c.type !== typeFilter) return false
+    if (statusFilter !== 'all' && c.status !== statusFilter) return false
+    return true
+  })
+
+  const isQuotaMaxed = quota?.connector_limit !== null && quota?.connector_limit !== undefined && quota.connector_count >= quota.connector_limit
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-gray-900">Connecteurs</h1>
-        <Button
-          onClick={() => setWizardOpen(true)}
-          className="flex items-center gap-2"
-          disabled={quota?.connector_limit !== null && quota?.connector_limit !== undefined && quota.connector_count >= quota.connector_limit}
-        >
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Connecteurs</h1>
+          {connectors && <p className="text-sm text-gray-500 mt-1">{connectors.length} connecteur{connectors.length > 1 ? 's' : ''} configuré{connectors.length > 1 ? 's' : ''}</p>}
+        </div>
+        <Button onClick={() => setWizardOpen(true)} className="flex items-center gap-2" disabled={isQuotaMaxed}>
           <Plus className="h-4 w-4" /> Nouveau connecteur
         </Button>
       </div>
 
       {quota && <QuotaBar count={quota.connector_count} limit={quota.connector_limit} />}
 
-      {isLoading && (
-        <div className="flex justify-center py-16">
-          <Spinner size="lg" />
+      {/* Search + Filters */}
+      {!isLoading && (connectors?.length ?? 0) > 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[220px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+              placeholder="Rechercher par nom ou URL…"
+              className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+          <div className="relative">
+            <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
+              className="appearance-none pl-3 pr-8 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-500">
+              <option value="all">Tous les types</option>
+              <option value="soap">SOAP</option>
+              <option value="rest">REST</option>
+            </select>
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+          </div>
+          <div className="relative">
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+              className="appearance-none pl-3 pr-8 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-500">
+              <option value="all">Tous les statuts</option>
+              <option value="active">Actif</option>
+              <option value="error">Erreur</option>
+              <option value="disabled">Désactivé</option>
+              <option value="draft">Brouillon</option>
+            </select>
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+          </div>
+          {(search || typeFilter !== 'all' || statusFilter !== 'all') && (
+            <button onClick={() => { setSearch(''); setTypeFilter('all'); setStatusFilter('all') }}
+              className="text-xs text-brand-600 hover:underline">Réinitialiser</button>
+          )}
         </div>
       )}
 
-      {!isLoading && connectors?.length === 0 && (
+      {isLoading && <div className="flex justify-center py-16"><Spinner size="lg" /></div>}
+
+      {!isLoading && (connectors?.length ?? 0) === 0 && (
         <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
-          <div className="p-4 bg-gray-100 rounded-full">
-            <Plug className="h-8 w-8 text-gray-400" />
-          </div>
+          <div className="p-4 bg-gray-100 rounded-full"><Plug className="h-8 w-8 text-gray-400" /></div>
           <div>
-            <p className="font-medium text-gray-700">Aucun connecteur</p>
-            <p className="text-sm text-gray-500 mt-1">Créez votre premier connecteur pour commencer.</p>
+            <p className="font-semibold text-gray-700 text-lg">Aucun connecteur</p>
+            <p className="text-sm text-gray-500 mt-1">Créez votre premier connecteur pour commencer à exposer vos APIs legacy.</p>
           </div>
           <Button onClick={() => setWizardOpen(true)} className="flex items-center gap-2">
             <Plus className="h-4 w-4" /> Créer un connecteur
@@ -184,14 +209,19 @@ export function ConnectorsPage() {
         </div>
       )}
 
-      {!isLoading && connectors && connectors.length > 0 && (
+      {!isLoading && filtered.length === 0 && (connectors?.length ?? 0) > 0 && (
+        <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+          <Search className="h-8 w-8 text-gray-300" />
+          <p className="font-medium text-gray-600">Aucun connecteur ne correspond à votre recherche</p>
+          <button onClick={() => { setSearch(''); setTypeFilter('all'); setStatusFilter('all') }}
+            className="text-sm text-brand-600 hover:underline">Effacer les filtres</button>
+        </div>
+      )}
+
+      {!isLoading && filtered.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {connectors.map((c) => (
-            <ConnectorCard
-              key={c.id}
-              connector={c}
-              onDelete={(id) => deleteConnector.mutate(id)}
-            />
+          {filtered.map((c) => (
+            <ConnectorCard key={c.id} connector={c} onDelete={(id) => deleteConnector.mutate(id)} />
           ))}
         </div>
       )}

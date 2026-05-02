@@ -13,6 +13,7 @@ class TeamMemberRead(BaseModel):
     role: str
     is_active: bool
     created_at: datetime
+    last_login_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -26,3 +27,12 @@ class TeamInvite(BaseModel):
 
 class TeamRoleUpdate(BaseModel):
     role: str
+
+
+class TeamMemberUpdate(BaseModel):
+    full_name: str | None = None
+    role: str | None = None
+
+
+class TeamResetPasswordResponse(BaseModel):
+    temp_password: str

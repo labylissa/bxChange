@@ -1,6 +1,8 @@
 """Team management API — admins managing their own tenant's users."""
 from __future__ import annotations
 
+import secrets
+import string
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -11,7 +13,7 @@ from app.core.dependencies import get_current_user, get_db, require_admin_or_abo
 from app.core.security import hash_password
 from app.models.subscription import Subscription
 from app.models.user import User
-from app.schemas.team import ALLOWED_INVITE_ROLES, TeamInvite, TeamMemberRead, TeamRoleUpdate
+from app.schemas.team import ALLOWED_INVITE_ROLES, TeamInvite, TeamMemberRead, TeamMemberUpdate, TeamResetPasswordResponse, TeamRoleUpdate
 
 router = APIRouter(prefix="/team", tags=["team"])
 
@@ -175,3 +177,109 @@ async def deactivate_member(
     await db.commit()
     await db.refresh(member)
     return TeamMemberRead.model_validate(member)
+
+
+@router.put(
+    "/members/{member_id}",
+    response_model=TeamMemberRead,
+    summary="Modifier un membre",
+    description="Modifie le nom et/ou le rôle d'un membre du tenant.",
+    responses={
+        200: {"description": "Membre modifié"},
+        401: _401,
+        403: _403,
+        404: _404,
+        422: {"description": "Rôle invalide"},
+    },
+)
+async def update_member(
+    member_id: uuid.UUID,
+    payload: TeamMemberUpdate,
+    current_user: User = Depends(require_admin_or_above),
+    db: AsyncSession = Depends(get_db),
+) -> TeamMemberRead:
+    member = (await db.execute(
+        select(User).where(User.id == member_id, User.tenant_id == current_user.tenant_id)
+    )).scalar_one_or_none()
+    if member is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+    if member.role == "super_admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot modify a super admin")
+
+    if payload.full_name is not None:
+        member.full_name = payload.full_name
+    if payload.role is not None:
+        if payload.role not in ALLOWED_INVITE_ROLES:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Role must be one of: {', '.join(sorted(ALLOWED_INVITE_ROLES))}",
+            )
+        member.role = payload.role
+
+    await db.commit()
+    await db.refresh(member)
+    return TeamMemberRead.model_validate(member)
+
+
+@router.patch(
+    "/members/{member_id}/reactivate",
+    response_model=TeamMemberRead,
+    summary="Réactiver un membre",
+    description="Réactive un membre précédemment désactivé.",
+    responses={
+        200: {"description": "Membre réactivé"},
+        401: _401,
+        403: _403,
+        404: _404,
+    },
+)
+async def reactivate_member(
+    member_id: uuid.UUID,
+    current_user: User = Depends(require_admin_or_above),
+    db: AsyncSession = Depends(get_db),
+) -> TeamMemberRead:
+    member = (await db.execute(
+        select(User).where(User.id == member_id, User.tenant_id == current_user.tenant_id)
+    )).scalar_one_or_none()
+    if member is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+
+    member.is_active = True
+    await db.commit()
+    await db.refresh(member)
+    return TeamMemberRead.model_validate(member)
+
+
+@router.post(
+    "/members/{member_id}/reset-password",
+    response_model=TeamResetPasswordResponse,
+    summary="Réinitialiser le mot de passe d'un membre",
+    description=(
+        "Génère un mot de passe temporaire pour un membre. "
+        "Ce mot de passe est retourné **une seule fois** — l'admin doit le communiquer manuellement."
+    ),
+    responses={
+        200: {"description": "Mot de passe temporaire généré"},
+        401: _401,
+        403: _403,
+        404: _404,
+    },
+)
+async def reset_member_password(
+    member_id: uuid.UUID,
+    current_user: User = Depends(require_admin_or_above),
+    db: AsyncSession = Depends(get_db),
+) -> TeamResetPasswordResponse:
+    member = (await db.execute(
+        select(User).where(User.id == member_id, User.tenant_id == current_user.tenant_id)
+    )).scalar_one_or_none()
+    if member is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+    if member.role == "super_admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot reset a super admin password")
+
+    alphabet = string.ascii_letters + string.digits + "!@#$%"
+    temp_password = "".join(secrets.choice(alphabet) for _ in range(16))
+    member.hashed_password = hash_password(temp_password)
+    await db.commit()
+    return TeamResetPasswordResponse(temp_password=temp_password)

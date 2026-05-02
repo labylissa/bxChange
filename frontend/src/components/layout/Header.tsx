@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { LogOut, User, ChevronRight, Menu } from 'lucide-react'
+import { LogOut, User, ChevronRight, Menu, Search } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { Button } from '@/components/ui/Button'
 
@@ -9,6 +9,13 @@ const PATH_LABELS: Record<string, string> = {
   logs: 'Logs',
   'api-keys': 'API Keys',
   settings: 'Paramètres',
+  webhooks: 'Webhooks',
+  'scheduled-jobs': 'Planification',
+  pipelines: 'Pipelines',
+  team: 'Équipe',
+  billing: 'Facturation',
+  security: 'Sécurité',
+  'api-docs': 'API Docs',
 }
 
 function Breadcrumb() {
@@ -35,9 +42,10 @@ function Breadcrumb() {
 
 interface HeaderProps {
   onMenuToggle: () => void
+  onSearchOpen: () => void
 }
 
-export function Header({ onMenuToggle }: HeaderProps) {
+export function Header({ onMenuToggle, onSearchOpen }: HeaderProps) {
   const navigate = useNavigate()
   const { user, logout } = useAuthStore()
 
@@ -60,6 +68,16 @@ export function Header({ onMenuToggle }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-3 flex-shrink-0">
+        <button
+          onClick={onSearchOpen}
+          className="hidden sm:flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+          title="Recherche rapide (Ctrl+K)"
+        >
+          <Search className="h-3.5 w-3.5" />
+          <span className="text-xs">Rechercher…</span>
+          <kbd className="text-xs bg-white border border-gray-200 rounded px-1 py-0.5 font-mono text-gray-400">⌘K</kbd>
+        </button>
+
         <div className="hidden sm:flex items-center gap-2 text-sm text-gray-700">
           <User className="h-4 w-4 text-gray-400" />
           <span className="truncate max-w-[140px]">{user?.full_name ?? user?.email}</span>
