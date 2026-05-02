@@ -179,25 +179,25 @@ function StepModal({
   )
 }
 
-// ── Main Wizard ────────────────────────────────────────────────────────────────
+// ── Wizard state ───────────────────────────────────────────────────────────────
 
-export function PipelineWizard({ pipeline }: { pipeline?: PipelineRead } = {}) {
-  const isEditMode = !!pipeline
-  const navigate = useNavigate()
-  const qc = useQueryClient()
+interface WizardState {
+  name: string
+  description: string
+  mergeStrategy: 'merge' | 'first' | 'last' | 'custom'
+  outputTransformText: string
+  steps: StepDraft[]
+}
 
-  const [wizardStep, setWizardStep] = useState(1)
-  const [name, setName] = useState(pipeline?.name ?? '')
-  const [description, setDescription] = useState(pipeline?.description ?? '')
-  const [mergeStrategy, setMergeStrategy] = useState<'merge' | 'first' | 'last' | 'custom'>(
-    pipeline?.merge_strategy ?? 'merge'
-  )
-  const [outputTransformText, setOutputTransformText] = useState(
-    pipeline?.output_transform ? JSON.stringify(pipeline.output_transform, null, 2) : '{}'
-  )
-  const [outputTransformError, setOutputTransformError] = useState('')
-  const [steps, setSteps] = useState<StepDraft[]>(
-    pipeline?.steps.map((s) => ({
+function initWizardState(pipeline?: PipelineRead): WizardState {
+  return {
+    name: pipeline?.name ?? '',
+    description: pipeline?.description ?? '',
+    mergeStrategy: pipeline?.merge_strategy ?? 'merge',
+    outputTransformText: pipeline?.output_transform
+      ? JSON.stringify(pipeline.output_transform, null, 2)
+      : '{}',
+    steps: pipeline?.steps.map((s) => ({
       _key: s.id,
       connector_id: s.connector_id,
       step_order: s.step_order,
@@ -207,11 +207,28 @@ export function PipelineWizard({ pipeline }: { pipeline?: PipelineRead } = {}) {
       condition: s.condition,
       on_error: s.on_error,
       timeout_seconds: s.timeout_seconds,
-    })) ?? []
-  )
+    })) ?? [],
+  }
+}
+
+// ── Main Wizard ────────────────────────────────────────────────────────────────
+
+export function PipelineWizard({ pipeline }: { pipeline?: PipelineRead } = {}) {
+  const isEditMode = !!pipeline
+  const navigate = useNavigate()
+  const qc = useQueryClient()
+
+  const [wizardStep, setWizardStep] = useState(1)
+  const [wizardState, setWizardState] = useState<WizardState>(() => initWizardState(pipeline))
+  const [outputTransformError, setOutputTransformError] = useState('')
   const [editingStep, setEditingStep] = useState<{ step: StepDraft; index: number } | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+
+  const { name, description, mergeStrategy, outputTransformText, steps } = wizardState
+
+  const patch = (updates: Partial<WizardState>) =>
+    setWizardState((prev) => ({ ...prev, ...updates }))
 
   const { data: connectors = [] } = useQuery<Connector[]>({
     queryKey: ['connectors'],
@@ -231,19 +248,17 @@ export function PipelineWizard({ pipeline }: { pipeline?: PipelineRead } = {}) {
       on_error: 'stop',
       timeout_seconds: 30,
     }
-    setSteps((prev) => [...prev, newStep])
+    patch({ steps: [...steps, newStep] })
     setEditingStep({ step: newStep, index: steps.length })
   }
 
   const removeStep = (key: string) => {
-    setSteps((prev) => {
-      const filtered = prev.filter((s) => s._key !== key)
-      return filtered.map((s, i) => ({ ...s, step_order: i + 1 }))
-    })
+    const filtered = steps.filter((s) => s._key !== key)
+    patch({ steps: filtered.map((s, i) => ({ ...s, step_order: i + 1 })) })
   }
 
   const saveStep = (updated: StepDraft) => {
-    setSteps((prev) => prev.map((s) => (s._key === updated._key ? updated : s)))
+    patch({ steps: steps.map((s) => (s._key === updated._key ? updated : s)) })
     setEditingStep(null)
   }
 
@@ -337,7 +352,7 @@ export function PipelineWizard({ pipeline }: { pipeline?: PipelineRead } = {}) {
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               placeholder="ex: Qualification Lead Insurance"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => patch({ name: e.target.value })}
             />
           </div>
           <div>
@@ -347,7 +362,7 @@ export function PipelineWizard({ pipeline }: { pipeline?: PipelineRead } = {}) {
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               placeholder="Décrivez ce que fait ce pipeline…"
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => patch({ description: e.target.value })}
             />
           </div>
           <div>
@@ -358,7 +373,7 @@ export function PipelineWizard({ pipeline }: { pipeline?: PipelineRead } = {}) {
                   key={opt.value}
                   className={`flex flex-col gap-0.5 p-3 rounded-lg border-2 cursor-pointer transition-colors ${mergeStrategy === opt.value ? 'border-brand-500 bg-brand-50' : 'border-gray-200 hover:border-gray-300'}`}
                 >
-                  <input type="radio" name="merge" value={opt.value} checked={mergeStrategy === opt.value} onChange={() => setMergeStrategy(opt.value)} className="sr-only" />
+                  <input type="radio" name="merge" value={opt.value} checked={mergeStrategy === opt.value} onChange={() => patch({ mergeStrategy: opt.value })} className="sr-only" />
                   <span className="text-sm font-semibold text-gray-900">{opt.label}</span>
                   <span className="text-xs text-gray-500">{opt.desc}</span>
                 </label>
@@ -424,7 +439,7 @@ export function PipelineWizard({ pipeline }: { pipeline?: PipelineRead } = {}) {
             rows={10}
             className={`w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500 ${outputTransformError ? 'border-red-300' : 'border-gray-300'}`}
             value={outputTransformText}
-            onChange={(e) => { setOutputTransformText(e.target.value); setOutputTransformError('') }}
+            onChange={(e) => { patch({ outputTransformText: e.target.value }); setOutputTransformError('') }}
           />
           {outputTransformError && <p className="text-xs text-red-500">{outputTransformError}</p>}
         </div>
