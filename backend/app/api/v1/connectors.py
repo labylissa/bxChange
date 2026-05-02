@@ -27,7 +27,7 @@ from app.schemas.connector import (
 )
 from app.schemas.execution import ExecuteRequest, ExecuteResponse
 from app.services import crypto, execution_service, rest_engine, snippet_generator, soap_engine, transformer
-from app.services.execution_service import ConnectorNotFoundError
+from app.services.execution_service import ConnectorNotFoundError, OperationRequiredError
 from app.services.rest_engine import RESTConnectionError, RESTResponseError, RESTSSLError, RESTTimeoutError
 from app.services.soap_engine import SOAPConnectionError, SOAPTimeoutError, WSDLLoadError
 
@@ -216,6 +216,7 @@ async def create_connector(
         wsdl_url=payload.wsdl_url,
         wsdl_source=payload.wsdl_source.value,
         wsdl_file_path=wsdl_file_path,
+        operation=payload.operation or None,
         auth_type=payload.auth_type.value,
         auth_config=encrypted_auth,
         headers=payload.headers,
@@ -284,6 +285,8 @@ async def update_connector(
         connector.base_url = payload.base_url
     if payload.wsdl_url is not None:
         connector.wsdl_url = payload.wsdl_url
+    if payload.operation is not None:
+        connector.operation = payload.operation or None
     if payload.auth_type is not None:
         connector.auth_type = payload.auth_type.value
     if payload.auth_config is not None:
@@ -374,6 +377,8 @@ async def execute_connector(
         )
     except ConnectorNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connector not found")
+    except OperationRequiredError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="operation is required for SOAP connectors")
 
     return ExecuteResponse(
         execution_id=exec_read.id,

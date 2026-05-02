@@ -335,6 +335,7 @@ function OverviewTab({ connector }: { connector: ReturnType<typeof connectorsApi
     { label: 'Auth', value: connector.auth_type, badge: false },
     { label: 'Base URL', value: connector.base_url ?? '—', badge: false },
     ...(wsdlValue ? [{ label: 'WSDL', value: wsdlValue.text, badge: wsdlValue.badge }] : []),
+    ...(connector.type === 'soap' ? [{ label: 'Opération', value: connector.operation ?? '—', badge: false }] : []),
     { label: 'Créé le', value: new Date(connector.created_at).toLocaleString('fr-FR'), badge: false },
   ]
   return (

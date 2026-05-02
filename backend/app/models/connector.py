@@ -39,6 +39,7 @@ class Connector(Base):
         nullable=False,
     )
     wsdl_file_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    operation: Mapped[str | None] = mapped_column(String, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id"), nullable=True
     )

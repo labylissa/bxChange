@@ -77,6 +77,7 @@ class ConnectorCreate(BaseModel):
             "type": "soap",
             "wsdl_url": "http://www.dneonline.com/calculator.asmx?WSDL",
             "wsdl_source": "url",
+            "operation": "Add",
             "auth_type": "none",
             "auth_config": {},
             "headers": {},
@@ -90,6 +91,7 @@ class ConnectorCreate(BaseModel):
     wsdl_url: str | None = None
     wsdl_source: WsdlSource = WsdlSource.url
     wsdl_file_id: str | None = None
+    operation: str | None = None
     auth_type: AuthType = AuthType.none
     auth_config: dict | None = None
     headers: dict | None = None
@@ -117,6 +119,7 @@ class ConnectorRead(BaseModel):
     wsdl_url: str | None
     wsdl_source: str
     wsdl_file_path: str | None
+    operation: str | None = None
     auth_type: str
     status: str
     headers: dict | None = None
@@ -131,6 +134,7 @@ class ConnectorUpdate(BaseModel):
     name: str | None = None
     base_url: str | None = None
     wsdl_url: str | None = None
+    operation: str | None = None
     auth_type: AuthType | None = None
     auth_config: dict | None = None
     headers: dict | None = None

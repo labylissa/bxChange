@@ -19,6 +19,10 @@ class ConnectorNotFoundError(Exception):
     """Raised when the connector does not exist or belongs to another tenant."""
 
 
+class OperationRequiredError(Exception):
+    """Raised when a SOAP execution has no operation in params and none stored on the connector."""
+
+
 class UnsupportedConnectorTypeError(Exception):
     """Raised for an unknown connector type."""
 
@@ -91,7 +95,9 @@ async def execute_connector(
 
     try:
         if connector.type == "soap":
-            operation = call_params.pop("operation", "")
+            operation = call_params.pop("operation", None) or connector.operation or ""
+            if not operation:
+                raise OperationRequiredError("operation is required for SOAP connectors")
             wsdl_source = connector.wsdl_file_path or connector.wsdl_url
             raw = await soap_engine.execute(
                 wsdl_url=wsdl_source,
@@ -136,7 +142,7 @@ async def execute_connector(
         if effective_transform:
             result_data = transformer.transform(transform_input, effective_transform)
 
-    except (ConnectorNotFoundError, UnsupportedConnectorTypeError):
+    except (ConnectorNotFoundError, OperationRequiredError, UnsupportedConnectorTypeError):
         raise
     except Exception as exc:
         status = "error"

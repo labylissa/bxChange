@@ -287,6 +287,7 @@ export function ConnectorWizard({ onClose }: Props) {
       connectorsApi.updateConnector(s.draftConnectorId, {
         status: 'active',
         ...(adv != null ? { advanced_config: adv } : {}),
+        ...(s.type === 'soap' && s.selectedOperation ? { operation: s.selectedOperation } : {}),
       }).catch(() => {})
     }
     qc.invalidateQueries({ queryKey: ['connectors'] })
@@ -817,8 +818,8 @@ export function ConnectorWizard({ onClose }: Props) {
     if (step === 1) return !!s.type && s.name.trim().length > 0
     if (step === 2) {
       if (s.type === 'soap') {
-        if (s.wsdlSource === 'url') return s.wsdlUrl.trim().length > 0 && s.wsdlOperations.length > 0
-        return s.wsdlFileId !== null && s.wsdlOperations.length > 0
+        if (s.wsdlSource === 'url') return s.wsdlUrl.trim().length > 0 && s.wsdlOperations.length > 0 && !!s.selectedOperation
+        return s.wsdlFileId !== null && s.wsdlOperations.length > 0 && !!s.selectedOperation
       }
       return s.baseUrl.trim().length > 0
     }

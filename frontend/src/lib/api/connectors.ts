@@ -50,6 +50,7 @@ export interface Connector {
   wsdl_url: string | null
   wsdl_source: WsdlSource
   wsdl_file_path: string | null
+  operation: string | null
   auth_type: AuthType
   status: ConnectorStatus
   transform_config: Record<string, unknown> | null
@@ -65,6 +66,7 @@ export interface ConnectorCreate {
   wsdl_url?: string
   wsdl_source?: WsdlSource
   wsdl_file_id?: string
+  operation?: string
   auth_type?: AuthType
   auth_config?: Record<string, unknown>
   headers?: Record<string, string>
@@ -76,6 +78,7 @@ export interface ConnectorUpdate {
   name?: string
   base_url?: string
   wsdl_url?: string
+  operation?: string
   auth_type?: AuthType
   auth_config?: Record<string, unknown>
   headers?: Record<string, string>
