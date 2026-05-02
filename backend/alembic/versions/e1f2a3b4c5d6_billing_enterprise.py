@@ -15,80 +15,56 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # New Enum types for PostgreSQL
-    license_status_enum = sa.Enum(
-        "trial", "active", "expired", "suspended", name="license_status_enum"
-    )
-    license_record_status = sa.Enum(
-        "trial", "active", "expired", "suspended", name="license_record_status"
-    )
-    license_status_enum.create(op.get_bind(), checkfirst=True)
-    license_record_status.create(op.get_bind(), checkfirst=True)
+    op.execute("DO $$ BEGIN CREATE TYPE license_status_enum AS ENUM ('trial','active','expired','suspended'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;")
+    op.execute("DO $$ BEGIN CREATE TYPE license_record_status AS ENUM ('trial','active','expired','suspended'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;")
 
-    # Add billing/license columns to tenants
-    op.add_column("tenants", sa.Column(
-        "license_status", license_status_enum, nullable=False, server_default="trial"
-    ))
-    op.add_column("tenants", sa.Column("trial_ends_at", sa.DateTime(), nullable=True))
-    op.add_column("tenants", sa.Column(
-        "executions_limit", sa.Integer(), nullable=False, server_default="1000"
-    ))
-    op.add_column("tenants", sa.Column(
-        "connectors_limit", sa.Integer(), nullable=False, server_default="100"
-    ))
-    op.add_column("tenants", sa.Column("contract_start", sa.DateTime(), nullable=True))
-    op.add_column("tenants", sa.Column("contract_end", sa.DateTime(), nullable=True))
-    op.add_column("tenants", sa.Column(
-        "annual_price_cents", sa.Integer(), nullable=False, server_default="0"
-    ))
-    op.add_column("tenants", sa.Column(
-        "executions_used", sa.Integer(), nullable=False, server_default="0"
-    ))
-    op.add_column("tenants", sa.Column(
-        "connectors_count", sa.Integer(), nullable=False, server_default="0"
-    ))
-    op.add_column("tenants", sa.Column("stripe_customer_id", sa.String(), nullable=True))
+    op.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS license_status license_status_enum NOT NULL DEFAULT 'trial'")
+    op.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMP")
+    op.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS executions_limit INTEGER NOT NULL DEFAULT 1000")
+    op.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS connectors_limit INTEGER NOT NULL DEFAULT 100")
+    op.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS contract_start TIMESTAMP")
+    op.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS contract_end TIMESTAMP")
+    op.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS annual_price_cents INTEGER NOT NULL DEFAULT 0")
+    op.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS executions_used INTEGER NOT NULL DEFAULT 0")
+    op.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS connectors_count INTEGER NOT NULL DEFAULT 0")
+    op.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR")
 
-    # Create licenses table
-    op.create_table(
-        "licenses",
-        sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("tenant_id", sa.Uuid(), nullable=False),
-        sa.Column("license_key", sa.String(), nullable=False),
-        sa.Column("status", license_record_status, nullable=False, server_default="trial"),
-        sa.Column("executions_limit", sa.Integer(), nullable=False),
-        sa.Column("connectors_limit", sa.Integer(), nullable=False),
-        sa.Column("contract_start", sa.DateTime(), nullable=False),
-        sa.Column("contract_end", sa.DateTime(), nullable=False),
-        sa.Column("annual_price_cents", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("notes", sa.Text(), nullable=True),
-        sa.Column("created_by", sa.Uuid(), nullable=False),
-        sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.Column("activated_at", sa.DateTime(), nullable=True),
-        sa.Column("suspended_at", sa.DateTime(), nullable=True),
-        sa.Column("suspension_reason", sa.String(), nullable=True),
-        sa.ForeignKeyConstraint(["created_by"], ["users.id"]),
-        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"]),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("license_key"),
-    )
-    op.create_index("ix_licenses_tenant_id", "licenses", ["tenant_id"])
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS licenses (
+            id UUID PRIMARY KEY,
+            tenant_id UUID NOT NULL REFERENCES tenants(id),
+            license_key VARCHAR NOT NULL UNIQUE,
+            status license_record_status NOT NULL DEFAULT 'trial',
+            executions_limit INTEGER NOT NULL,
+            connectors_limit INTEGER NOT NULL,
+            contract_start TIMESTAMP NOT NULL,
+            contract_end TIMESTAMP NOT NULL,
+            annual_price_cents INTEGER NOT NULL DEFAULT 0,
+            notes TEXT,
+            created_by UUID NOT NULL REFERENCES users(id),
+            created_at TIMESTAMP NOT NULL,
+            activated_at TIMESTAMP,
+            suspended_at TIMESTAMP,
+            suspension_reason VARCHAR
+        )
+    """)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_licenses_tenant_id ON licenses (tenant_id)")
 
 
 def downgrade() -> None:
-    op.drop_index("ix_licenses_tenant_id", table_name="licenses")
-    op.drop_table("licenses")
+    op.execute("DROP INDEX IF EXISTS ix_licenses_tenant_id")
+    op.execute("DROP TABLE IF EXISTS licenses")
 
-    op.drop_column("tenants", "stripe_customer_id")
-    op.drop_column("tenants", "connectors_count")
-    op.drop_column("tenants", "executions_used")
-    op.drop_column("tenants", "annual_price_cents")
-    op.drop_column("tenants", "contract_end")
-    op.drop_column("tenants", "contract_start")
-    op.drop_column("tenants", "connectors_limit")
-    op.drop_column("tenants", "executions_limit")
-    op.drop_column("tenants", "trial_ends_at")
-    op.drop_column("tenants", "license_status")
+    op.execute("ALTER TABLE tenants DROP COLUMN IF EXISTS stripe_customer_id")
+    op.execute("ALTER TABLE tenants DROP COLUMN IF EXISTS connectors_count")
+    op.execute("ALTER TABLE tenants DROP COLUMN IF EXISTS executions_used")
+    op.execute("ALTER TABLE tenants DROP COLUMN IF EXISTS annual_price_cents")
+    op.execute("ALTER TABLE tenants DROP COLUMN IF EXISTS contract_end")
+    op.execute("ALTER TABLE tenants DROP COLUMN IF EXISTS contract_start")
+    op.execute("ALTER TABLE tenants DROP COLUMN IF EXISTS connectors_limit")
+    op.execute("ALTER TABLE tenants DROP COLUMN IF EXISTS executions_limit")
+    op.execute("ALTER TABLE tenants DROP COLUMN IF EXISTS trial_ends_at")
+    op.execute("ALTER TABLE tenants DROP COLUMN IF EXISTS license_status")
 
-    sa.Enum(name="license_record_status").drop(op.get_bind(), checkfirst=True)
-    sa.Enum(name="license_status_enum").drop(op.get_bind(), checkfirst=True)
+    op.execute("DROP TYPE IF EXISTS license_record_status")
+    op.execute("DROP TYPE IF EXISTS license_status_enum")
