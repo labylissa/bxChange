@@ -196,6 +196,61 @@ async def test_on_error_stop():
 
 
 @pytest.mark.asyncio
+async def test_operation_injected_when_template_empty():
+    """operation from input_params must flow to execute_connector even with empty template."""
+    cid = uuid.uuid4()
+    step = _FakePipelineStep(1, cid)
+    step2 = _FakePipelineStep(2, uuid.uuid4())
+    step.params_template = {}  # no explicit template
+    pipeline = _FakePipeline(merge_strategy="first")
+    tenant = _FakeTenant()
+    db = _FakeDB([step, step2])
+
+    captured_params: list[dict] = []
+
+    async def fake_execute(**kwargs):
+        captured_params.append(kwargs.get("params", {}))
+        return _FakeExecRead({"ok": True})
+
+    with patch("app.services.pipeline_engine.execute_connector", side_effect=fake_execute), \
+         patch("app.services.pipeline_engine.check_license_and_quota", new=AsyncMock()):
+        engine = PipelineEngine()
+        result = await engine.execute(
+            pipeline, {"operation": "ListOfLanguagesByName"}, tenant, db
+        )
+
+    assert result.status == "success"
+    assert captured_params[0].get("operation") == "ListOfLanguagesByName"
+
+
+@pytest.mark.asyncio
+async def test_operation_not_overridden_when_templated():
+    """Explicit params_template wins over input_params fallback."""
+    cid = uuid.uuid4()
+    step = _FakePipelineStep(1, cid)
+    step2 = _FakePipelineStep(2, uuid.uuid4())
+    step.params_template = {"operation": "FixedOperation"}
+    pipeline = _FakePipeline(merge_strategy="first")
+    tenant = _FakeTenant()
+    db = _FakeDB([step, step2])
+
+    captured_params: list[dict] = []
+
+    async def fake_execute(**kwargs):
+        captured_params.append(kwargs.get("params", {}))
+        return _FakeExecRead({"ok": True})
+
+    with patch("app.services.pipeline_engine.execute_connector", side_effect=fake_execute), \
+         patch("app.services.pipeline_engine.check_license_and_quota", new=AsyncMock()):
+        engine = PipelineEngine()
+        await engine.execute(
+            pipeline, {"operation": "FromInput"}, tenant, db
+        )
+
+    assert captured_params[0].get("operation") == "FixedOperation"
+
+
+@pytest.mark.asyncio
 async def test_on_error_skip_continues():
     cid1, cid2 = uuid.uuid4(), uuid.uuid4()
     steps = [_FakePipelineStep(1, cid1, on_error="skip"), _FakePipelineStep(2, cid2)]

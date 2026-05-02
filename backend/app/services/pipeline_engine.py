@@ -201,6 +201,12 @@ class PipelineEngine:
             step.params_template, input_params, completed_steps, str(tenant.id)
         )
 
+        # If the template left connector-critical keys unset, fall back to input_params.
+        # This lets callers pass {"operation": "..."} without templating every step.
+        for _key in ("operation", "method", "path"):
+            if _key not in resolved_params and _key in input_params:
+                resolved_params = {**resolved_params, _key: input_params[_key]}
+
         try:
             # Quota check — each step = 1 execution
             await check_license_and_quota(tenant)
